@@ -33,7 +33,7 @@ jobs:
         if: failure()
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: frontend/playwright-report/
           retention-days: 7
 
   backend:
@@ -43,10 +43,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: '0.12.9'
-      - run: uv sync --project apps/backend --frozen
-      - run: uv run --project apps/backend ruff check apps/backend
-      - run: uv run --project apps/backend ruff format --check apps/backend
-      - run: uv run --project apps/backend pytest apps/backend/tests
+      - run: uv sync --project backend --frozen
+      - run: uv run --project backend ruff check backend
+      - run: uv run --project backend ruff format --check backend
+      - run: uv run --project backend pytest backend/tests
 
   containers:
     runs-on: ubuntu-latest

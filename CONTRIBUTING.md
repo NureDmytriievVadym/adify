@@ -9,13 +9,13 @@
 
 ## Where code belongs
 
-- Page routing and page composition: `apps/web/src/routes`.
-- Reusable UI primitives and layouts: `apps/web/src/lib/components`.
-- Story #1 example content: `apps/web/src/lib/demo`. It is deliberately separate
+- Page routing and page composition: `frontend/src/routes`.
+- Reusable UI primitives and layouts: `frontend/src/lib/components`.
+- Story #1 example content: `frontend/src/lib/demo`. It is deliberately separate
   from future API-backed domain models. Remove fixtures from a feature when its
   live implementation is introduced; do not silently fall back to fixtures on errors.
-- Versioned API routers: `apps/backend/src/adify_api/api/v1`.
-- Configuration and cross-cutting services: `apps/backend/src/adify_api/core`.
+- Versioned API routers: `backend/src/adify_api/api/v1`.
+- Configuration and cross-cutting services: `backend/src/adify_api/core`.
 - Add backend feature packages (accounts, listings, orders, etc.) with their
   implementation stories; keep HTTP, business rules, and persistence separate.
 - Add database models and reviewed migrations with the first persistence story.

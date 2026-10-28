@@ -41,18 +41,19 @@ make e2e       # Chromium, Firefox, WebKit: responsive layout, navigation, axe
 ```
 
 `npm run format` formats the web workspace and root JavaScript/Markdown files;
-`uv run --project apps/backend ruff format .` formats Python.
-Dependency versions are recorded in `package-lock.json` and `apps/backend/uv.lock`.
+`uv run --project backend ruff format .` formats Python.
+Dependency versions are recorded in `package-lock.json` and `backend/uv.lock`.
 
 ## Repository
 
 ```text
-apps/
-  web/           Svelte 5 + SvelteKit, TypeScript, adapter-node
-  backend/       FastAPI, versioned REST API, uv-managed Python package
+frontend/        Svelte 5 + SvelteKit, TypeScript, adapter-node
+  docker/        Dockerfile and Compose service for the website
+backend/         FastAPI, versioned REST API, uv-managed Python package
+  docker/        Dockerfile and Compose services for API, PostgreSQL 18, Redis
 docs/            Architecture, contribution guide, story #1 scope and acceptance
 .github/         Pull request checks
-compose.yaml     Local web, API, PostgreSQL 18, Redis
+compose.yaml     Includes frontend/ and backend/ Compose files
 ```
 
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),

@@ -7,7 +7,7 @@ The provided diagram references have not been reconstructed or assumed.
 
 | Area        | Baseline                                                             | Reason                                                                                     |
 | ----------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Repository  | `apps/web`, `apps/backend`; npm workspace + independent uv package   | One repository, independently buildable clients and API; no heavy orchestration dependency |
+| Repository  | `frontend`, `backend`; npm workspace + independent uv package        | One repository, independently buildable clients and API; no heavy orchestration dependency |
 | Web         | Svelte 5, SvelteKit 3, strict TypeScript, Node adapter               | SRS-prescribed stack; SSR, file-based routing, straightforward Node deployment             |
 | Backend     | Python 3.13, FastAPI, versioned `/api/v1` routes                     | One OpenAPI contract for the web and future Flutter Android client                         |
 | Persistence | PostgreSQL 18 and Redis in local Compose                             | Selected by the SRS; feature schemas and cache clients belong to later stories             |

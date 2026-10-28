@@ -1,5 +1,5 @@
 package-lock.json
-apps/backend/
+backend/
 node_modules/
 .svelte-kit/
 build/
