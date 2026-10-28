@@ -21,23 +21,24 @@ The website currently uses explicitly labeled, local presentation fixtures.
 
 ## Native development
 
-Prerequisites: Node.js 24 LTS, npm 12, Python 3.13, and [uv](https://docs.astral.sh/uv/).
+Prerequisites: Node.js 24 LTS, npm 12, Python 3.13, [uv](https://docs.astral.sh/uv/),
+and [just](https://just.systems/). Run `just` to list recipes.
 
 ```sh
-make install
-make web       # terminal 1: http://localhost:5173
-make backend   # terminal 2: http://localhost:8000/docs
+just install
+just web       # terminal 1: http://localhost:5173
+just backend   # terminal 2: http://localhost:8000/docs
 ```
 
 The UI and health endpoint can run without a database. Start the development
-database and cache when needed with `docker compose up -d postgres redis`.
+database and cache when needed with `just infra`.
 
 ## Checks
 
 ```sh
-make check     # formatting, lint, Svelte/TypeScript, backend tests, production build
+just check     # formatting, lint, Svelte/TypeScript, backend tests, production build
 npm run test:e2e:install
-make e2e       # Chromium, Firefox, WebKit: responsive layout, navigation, axe
+just e2e       # Chromium, Firefox, WebKit: responsive layout, navigation, axe
 ```
 
 `npm run format` formats the web workspace and root JavaScript/Markdown files;
