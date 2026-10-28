@@ -37,9 +37,9 @@ those external acceptance items are not completed by these local files.
 Run:
 
 ```sh
-make check
+just check
 npm run test:e2e:install
-make e2e
+just e2e
 docker compose up --build --wait
 ```
 
