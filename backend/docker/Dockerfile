@@ -5,9 +5,9 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 WORKDIR /app
-COPY apps/backend/pyproject.toml apps/backend/uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
-COPY apps/backend/src ./src
+COPY backend/src ./src
 RUN uv sync --frozen --no-dev && useradd --system --uid 10001 adify
 USER adify
 EXPOSE 8000
