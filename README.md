@@ -19,6 +19,16 @@ Compose uses local development defaults; optional overrides are documented in
 `.env.example`. PostgreSQL 18 and Redis run on the internal Compose network.
 The website currently uses explicitly labeled, local presentation fixtures.
 
+### Managing local containers
+
+```sh
+docker compose ps                  # show service status
+docker compose logs -f web backend # follow application logs (Ctrl+C to exit)
+docker compose down                # stop and remove containers; keep data volumes
+```
+
+Start the services again with `docker compose up -d`.
+
 ## Native development
 
 Prerequisites: Node.js 24 LTS, npm 12, Python 3.13, and [uv](https://docs.astral.sh/uv/).
