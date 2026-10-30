@@ -1864,6 +1864,144 @@ main:focus {
   margin-bottom: 30px;
 }
 
+.register-page .page-intro {
+  max-width: 640px;
+}
+.register-card {
+  max-width: 640px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 40px;
+  display: grid;
+  gap: 24px;
+}
+.form-alert {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #e6c9bd;
+  border-radius: 5px;
+  background: #fbefe9;
+  color: #8a3b1f;
+  font-size: 13px;
+}
+.role-options {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.role-options legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.role-options .field-error {
+  grid-column: 1 / -1;
+}
+.role-option {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 18px 18px 18px 48px;
+  border: 1px solid #ccd6c9;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    border-color 160ms,
+    background 160ms;
+}
+.role-option:has(input:checked) {
+  border-color: var(--green);
+  background: #edf5de;
+}
+.role-option input {
+  position: absolute;
+  top: 19px;
+  left: 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--green);
+}
+.role-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.role-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.form-field {
+  display: grid;
+  gap: 8px;
+}
+.form-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.form-field input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #ccd6c9;
+  border-radius: 6px;
+  background: white;
+  color: var(--ink);
+  font-size: 14px;
+}
+.form-field input:focus-visible {
+  outline-offset: 2px;
+}
+.form-field input[aria-invalid='true'],
+.role-options.invalid .role-option {
+  border-color: #b4532f;
+}
+.field-hint,
+.field-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.field-hint {
+  color: var(--muted);
+}
+.field-error {
+  color: #a3401d;
+  font-weight: 550;
+}
+.register-submit {
+  justify-self: start;
+}
+.register-success {
+  justify-items: start;
+  gap: 18px;
+}
+.register-success h2 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: -0.8px;
+}
+.register-success p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.register-success strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.success-mark {
+  display: inline-flex;
+  padding: 10px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--green);
+}
+
 @media (min-width: 1500px) {
   .hero {
     min-height: 700px;
@@ -2214,6 +2352,15 @@ main:focus {
   }
 }
 @media (max-width: 640px) {
+  .register-card {
+    padding: 24px 20px;
+  }
+  .role-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .register-submit {
+    justify-self: stretch;
+  }
   .container {
     width: calc(100% - 40px);
   }

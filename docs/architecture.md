@@ -10,7 +10,7 @@ The provided diagram references have not been reconstructed or assumed.
 | Repository  | `frontend`, `backend`; npm workspace + independent uv package        | One repository, independently buildable clients and API; no heavy orchestration dependency |
 | Web         | Svelte 5, SvelteKit 3, strict TypeScript, Node adapter               | SRS-prescribed stack; SSR, file-based routing, straightforward Node deployment             |
 | Backend     | Python 3.13, FastAPI, versioned `/api/v1` routes                     | One OpenAPI contract for the web and future Flutter Android client                         |
-| Persistence | PostgreSQL 18 and Redis in local Compose                             | Selected by the SRS; feature schemas and cache clients belong to later stories             |
+| Persistence | PostgreSQL 18 via async SQLAlchemy 2 and Alembic; Redis in Compose   | Selected by the SRS; each story adds its tables as a reviewed migration                    |
 | Interface   | Shared semantic components and CSS variables                         | Small initial UI, mobile-first constraints, straightforward extension by designers         |
 | Tooling     | npm + uv lockfiles, ESLint, Prettier, Ruff, pytest, Playwright + axe | Reproducible installation and executable acceptance checks                                 |
 
@@ -20,9 +20,10 @@ actions and base images should be maintained by the infrastructure owner.
 
 ## Runtime boundaries
 
-SvelteKit renders the preview without backend requests. Its only runtime data is
-explicitly labeled presentation fixtures. The backend currently exposes a typed
-process-liveness endpoint and automatic Swagger/OpenAPI documentation.
+SvelteKit renders the preview pages from explicitly labeled presentation fixtures.
+Registration (`/register`) calls the API from the browser at `PUBLIC_API_BASE_URL`;
+the API allows the web origins listed in `ADIFY_CORS_ORIGINS`. The backend exposes
+a process-liveness endpoint, account registration, and Swagger/OpenAPI documentation.
 
 Future web and Android data flows must use the shared FastAPI REST API over HTTPS
 and Socket.IO over WSS. Both clients must stay independent of PostgreSQL, Redis,
@@ -30,7 +31,7 @@ Mono, and storage credentials. Future contracts should be derived from FastAPI's
 OpenAPI schema rather than maintaining duplicate handwritten schema definitions.
 Do not add a second business API in SvelteKit route handlers.
 
-Domain packages, database migrations, JWT/session management, Socket.IO, scheduled
+Further domain packages, JWT/session management, Socket.IO, scheduled
 jobs, and integrations will be introduced with their stories. The current
 `/api/v1/health` route reports liveness, not dependency readiness. Introduce a
 separate readiness check when the application acquires mandatory dependencies.

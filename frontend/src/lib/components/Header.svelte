@@ -46,12 +46,8 @@
       </div>
       <div class="header-actions">
         <span class="currency-label">Ukraine <span aria-hidden="true">·</span> UAH</span>
-        <button
-          type="button"
-          class="button button-dark button-small"
-          disabled
-          title="Account registration is coming in a later release"
-          >Get started <Icon name="arrow" size={16} /></button
+        <a class="button button-dark button-small" href="/register"
+          >Get started <Icon name="arrow" size={16} /></a
         >
       </div>
     </nav>

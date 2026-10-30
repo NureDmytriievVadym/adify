@@ -8,6 +8,8 @@ class Settings(BaseSettings):
 
     app_name: str = "Adify API"
     debug: bool = False
+    database_url: str = "postgresql+psycopg://adify:adify-local-only@localhost:5432/adify"
+    cors_origins: list[str] = ["http://localhost:5173"]
 
 
 @lru_cache
