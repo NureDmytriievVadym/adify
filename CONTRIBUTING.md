@@ -5,7 +5,7 @@
 1. Read the relevant SRS v1.2 sections and backlog acceptance notes. The SRS takes
    precedence. Keep unresolved TBDs explicit; agree on them before implementation.
 2. Create a short-lived branch such as `feat/07-public-listings`.
-3. Run `make install`; use `make web` and `make backend`, or Docker Compose.
+3. Run `just up` for the local stack with hot-reload.
 
 ## Where code belongs
 
@@ -26,7 +26,7 @@ labels, descriptive links, and the mobile navigation disclosure pattern.
 
 ## Review and checks
 
-Run `make check` and `make e2e`. Add meaningful tests for behavior and regression
+Run `just lint`, `just test`, and `just e2e`. Add meaningful tests for behavior and regression
 risks. Browser coverage includes all six preview pages, 320/360/768/1440 px layouts,
 and axe WCAG 2.1 Level A checks on Chromium, Firefox, and WebKit. Manually verify
 the current and previous stable Chrome, Firefox, Edge, and Safari before marking

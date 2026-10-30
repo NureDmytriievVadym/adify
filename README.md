@@ -5,55 +5,34 @@ The product language is English and the currency is UAH.
 
 ## Quick start
 
-Install Docker with Compose, then run from this directory:
+Install Docker with Compose and [just](https://just.systems/), then run from
+this directory:
 
 ```sh
-docker compose up --build
+just up        # dev stack with hot-reload; `just` lists all recipes
 ```
 
 - Website: http://localhost:5173
 - FastAPI Swagger: http://localhost:8000/docs
 - API health: http://localhost:8000/api/v1/health
 
-Compose uses local development defaults; optional overrides are documented in
-`.env.example`. PostgreSQL 18 and Redis run on the internal Compose network.
-The website currently uses explicitly labeled, local presentation fixtures.
-
-### Managing local containers
-
-```sh
-docker compose ps                  # show service status
-docker compose logs -f web backend # follow application logs (Ctrl+C to exit)
-docker compose down                # stop and remove containers; keep data volumes
-```
-
-Start the services again with `docker compose up -d`.
-
-## Native development
-
-Prerequisites: Node.js 24 LTS, npm 12, Python 3.13, and [uv](https://docs.astral.sh/uv/).
-
-```sh
-make install
-make web       # terminal 1: http://localhost:5173
-make backend   # terminal 2: http://localhost:8000/docs
-```
-
-The UI and health endpoint can run without a database; registration needs
-PostgreSQL at `ADIFY_DATABASE_URL` (see `backend/.env.example`). Apply migrations
-with `uv run --project backend alembic -c backend/alembic.ini upgrade head`.
-The Docker backend applies them on start.
+Source is bind-mounted: edits in `frontend/` and `backend/` reload without a
+rebuild. Rebuild (`just up` again) after changing dependencies. Compose uses
+local development defaults; optional overrides are documented in `.env.example`.
+PostgreSQL 18 and Redis run on the internal Compose network. The website
+currently uses explicitly labeled, local presentation fixtures.
 
 ## Checks
 
+Everything runs in containers; only Docker and just are needed on the host.
+
 ```sh
-make check     # formatting, lint, Svelte/TypeScript, backend tests, production build
-npm run test:e2e:install
-make e2e       # Chromium, Firefox, WebKit: responsive layout, navigation, axe
+just lint      # Prettier, ESLint, Svelte/TypeScript, Ruff
+just format    # Prettier and Ruff formatting
+just test      # backend tests
+just e2e       # Playwright: Chromium, Firefox, WebKit; `just e2e --project=chromium`
 ```
 
-`npm run format` formats the web workspace and root JavaScript/Markdown files;
-`uv run --project backend ruff format .` formats Python.
 Dependency versions are recorded in `package-lock.json` and `backend/uv.lock`.
 
 ## Repository
@@ -65,7 +44,8 @@ backend/         FastAPI, versioned REST API, uv-managed Python package
   docker/        Dockerfile and Compose services for API, PostgreSQL 18, Redis
 docs/            Architecture, contribution guide, story #1 scope and acceptance
 .github/         Pull request checks
-compose.yaml     Includes frontend/ and backend/ Compose files
+docker-compose.yml  Local development stack (includes app Compose files)
+justfile         Developer commands
 ```
 
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),

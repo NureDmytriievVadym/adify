@@ -1,0 +1,5 @@
+name: adify
+
+include:
+  - frontend/docker/docker-compose.yml
+  - backend/docker/docker-compose.yml

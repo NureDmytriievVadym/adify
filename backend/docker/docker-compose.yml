@@ -5,13 +5,15 @@ services:
       dockerfile: backend/docker/Dockerfile
     ports:
       - '127.0.0.1:${API_PORT:-8000}:8000'
-    environment:
-      ADIFY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-adify}:${POSTGRES_PASSWORD:-adify-local-only}@postgres:5432/${POSTGRES_DB:-adify}
-      ADIFY_CORS_ORIGINS: '["http://localhost:${WEB_PORT:-5173}"]'
+    volumes:
+      - ../../backend:/app
+      - /app/.venv
+    init: true
     depends_on:
       postgres:
         condition: service_healthy
-    init: true
+      redis:
+        condition: service_healthy
     healthcheck:
       test:
         [

@@ -37,10 +37,10 @@ those external acceptance items are not completed by these local files.
 Run:
 
 ```sh
-make check
-npm run test:e2e:install
-make e2e
-docker compose up --build --wait
+just lint
+just test
+just e2e
+just up -d --wait
 ```
 
 The Playwright suite checks all six pages at 320, 360, 768, and 1440 px in Chromium,
