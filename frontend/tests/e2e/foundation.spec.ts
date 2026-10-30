@@ -8,6 +8,7 @@ const routes = [
   '/orders',
   '/orders/demo',
   '/how-it-works',
+  '/register',
 ];
 
 for (const route of routes) {
