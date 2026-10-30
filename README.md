@@ -39,8 +39,10 @@ make web       # terminal 1: http://localhost:5173
 make backend   # terminal 2: http://localhost:8000/docs
 ```
 
-The UI and health endpoint can run without a database. Start the development
-database and cache when needed with `docker compose up -d postgres redis`.
+The UI and health endpoint can run without a database; registration needs
+PostgreSQL at `ADIFY_DATABASE_URL` (see `backend/.env.example`). Apply migrations
+with `uv run --project backend alembic -c backend/alembic.ini upgrade head`.
+The Docker backend applies them on start.
 
 ## Checks
 
@@ -67,7 +69,7 @@ compose.yaml     Includes frontend/ and backend/ Compose files
 ```
 
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),
-and [story #1](docs/story-01.md). The supplied **Adify – SRS v1.2.md** is the
+[story #1](docs/story-01.md), and [story #3](docs/story-03.md). The supplied **Adify – SRS v1.2.md** is the
 source of truth and takes precedence over the product backlog. The source
 documents are supplied alongside this repository and are not modified here.
 

@@ -8,7 +8,9 @@ WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/src ./src
+COPY backend/alembic.ini ./
+COPY backend/migrations ./migrations
 RUN uv sync --frozen --no-dev && useradd --system --uid 10001 adify
 USER adify
 EXPOSE 8000
-CMD [".venv/bin/uvicorn", "adify_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", ".venv/bin/alembic upgrade head && exec .venv/bin/uvicorn adify_api.main:app --host 0.0.0.0 --port 8000"]

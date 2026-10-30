@@ -12,6 +12,7 @@ export default ts.config(
       '**/playwright-report/**',
       '**/test-results/**',
       '**/.venv/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,
