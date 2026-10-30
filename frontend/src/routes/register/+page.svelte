@@ -87,10 +87,9 @@
       <p>
         Your {account.role} account for <strong>{account.email}</strong> has been created. Verify your
         email address and phone number to reveal phone numbers, start chats, create listings, and place
-        orders. Sign-in and verification are coming in a later release.
+        orders. Verification is coming in a later release.
       </p>
-      <a class="button button-dark" href="/listings">Browse the marketplace <Icon name="arrow" /></a
-      >
+      <a class="button button-dark" href="/sign-in">Sign in <Icon name="arrow" /></a>
     </section>
   {:else}
     <form class="register-card" novalidate bind:this={form} onsubmit={submit}>

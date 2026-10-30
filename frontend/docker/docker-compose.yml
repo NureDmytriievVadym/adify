@@ -9,6 +9,8 @@ services:
       - ../..:/app
       - /app/node_modules
       - /app/frontend/node_modules
+    environment:
+      PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
     init: true
     healthcheck:
       test:

@@ -2,7 +2,7 @@ default:
     @just --list
 
 up *args:
-    docker compose up --build {{args}}
+    docker compose up --build --renew-anon-volumes {{args}}
 
 down *args:
     docker compose down {{args}}
@@ -26,4 +26,4 @@ test:
 
 # Playwright in Chromium, Firefox, WebKit; extra args go to Playwright: `just e2e --project=chromium`
 e2e *args:
-    docker run --rm --ipc=host -v {{quote(justfile_directory() + ":/work")}} -v /work/node_modules -v /work/frontend/node_modules -w /work mcr.microsoft.com/playwright:v1.64.1-noble sh -c "npm ci --ignore-scripts && npm run test:e2e -- {{args}}"
+    docker run --rm --ipc=host -v {{quote(justfile_directory() + ":/work")}} -v /work/node_modules -v /work/frontend/node_modules -w /work mcr.microsoft.com/playwright:v1.64.1-noble sh -c "npm ci --ignore-scripts && npm run test:e2e -- {{args}}; status=\$?; chown -R $(id -u):$(id -g) frontend/build frontend/.svelte-kit frontend/test-results frontend/playwright-report 2>/dev/null; exit \$status"

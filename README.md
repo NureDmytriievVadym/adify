@@ -19,7 +19,8 @@ just up        # dev stack with hot-reload; `just` lists all recipes
 Source is bind-mounted: edits in `frontend/` and `backend/` reload without a
 rebuild. Rebuild (`just up` again) after changing dependencies. Compose uses
 local development defaults; optional overrides are documented in `.env.example`.
-PostgreSQL 18 and Redis run on the internal Compose network. The website
+PostgreSQL 18 and Redis run on the internal Compose network; the backend
+applies database migrations on start. The website
 currently uses explicitly labeled, local presentation fixtures.
 
 ## Checks
@@ -49,7 +50,8 @@ justfile         Developer commands
 ```
 
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),
-[story #1](docs/story-01.md), and [story #3](docs/story-03.md). The supplied **Adify – SRS v1.2.md** is the
+[story #1](docs/story-01.md), [story #3](docs/story-03.md), and
+[story #4](docs/story-04.md). The supplied **Adify – SRS v1.2.md** is the
 source of truth and takes precedence over the product backlog. The source
 documents are supplied alongside this repository and are not modified here.
 

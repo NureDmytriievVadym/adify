@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import adify_api.accounts.models  # noqa: F401
+import adify_api.auth.models  # noqa: F401
 from adify_api.core.config import get_settings
 from adify_api.core.db import Base
 
