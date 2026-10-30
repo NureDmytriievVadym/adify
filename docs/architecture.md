@@ -21,9 +21,17 @@ actions and base images should be maintained by the infrastructure owner.
 ## Runtime boundaries
 
 SvelteKit renders the preview pages from explicitly labeled presentation fixtures.
-Registration (`/register`) calls the API from the browser at `PUBLIC_API_BASE_URL`;
-the API allows the web origins listed in `ADIFY_CORS_ORIGINS`. The backend exposes
-a process-liveness endpoint, account registration, and Swagger/OpenAPI documentation.
+Registration, sign-in, and the account page call the API from the browser at
+`PUBLIC_API_BASE_URL`; the API allows the web origins listed in `ADIFY_CORS_ORIGINS`
+with credentials. The backend exposes a process-liveness endpoint, accounts,
+authentication, and Swagger/OpenAPI documentation.
+
+Authentication follows NFR-SEC-001: a 15-minute HS256 JWT access token sent as
+`Authorization: Bearer`, and a 30-day refresh token rotated on every use and
+stored only as a SHA-256 hash. The web keeps the access token in memory and the
+refresh token in an HttpOnly `adify_refresh` cookie scoped to `/api/v1/auth`;
+native clients request it in the response body. `ADIFY_JWT_SECRET` must be set
+outside local development.
 
 Future web and Android data flows must use the shared FastAPI REST API over HTTPS
 and Socket.IO over WSS. Both clients must stay independent of PostgreSQL, Redis,

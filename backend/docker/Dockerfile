@@ -9,4 +9,4 @@ WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-install-project
 EXPOSE 8000
-CMD ["uvicorn", "adify_api.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn adify_api.main:app --reload --host 0.0.0.0 --port 8000"]

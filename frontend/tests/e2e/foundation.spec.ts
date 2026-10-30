@@ -9,6 +9,8 @@ const routes = [
   '/orders/demo',
   '/how-it-works',
   '/register',
+  '/sign-in',
+  '/account',
 ];
 
 for (const route of routes) {

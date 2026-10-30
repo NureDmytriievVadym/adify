@@ -6,7 +6,10 @@
   import '../app.css';
   import Header from '#lib/components/Header.svelte';
   import Footer from '#lib/components/Footer.svelte';
+  import { onMount } from 'svelte';
+  import { restoreSession } from '#lib/accounts/session.svelte.ts';
   let { children } = $props();
+  onMount(restoreSession);
 </script>
 
 <a class="skip-link" href="#main-content">Skip to content</a>

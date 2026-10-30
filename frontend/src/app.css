@@ -2002,6 +2002,56 @@ main:focus {
   color: var(--green);
 }
 
+.sign-in-link {
+  font-size: 13px;
+  font-weight: 550;
+}
+.sign-in-link:hover,
+.form-footnote a:hover {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+.form-footnote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.form-footnote a {
+  color: var(--ink);
+  font-weight: 600;
+}
+.form-alert:focus {
+  outline: none;
+}
+.account-title {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.5px;
+}
+.account-details {
+  margin: 0;
+  display: grid;
+  gap: 16px;
+}
+.account-details div {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.account-details dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.account-details dd {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.account-role {
+  text-transform: capitalize;
+}
+
 @media (min-width: 1500px) {
   .hero {
     min-height: 700px;

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.schemas import AccountResponse, ErrorResponse, RegistrationRequest
 from adify_api.accounts.service import RegistrationError, register_account
+from adify_api.auth.dependencies import CurrentAccount
 from adify_api.core.db import get_session
 
 router = APIRouter(prefix="/accounts", tags=["Accounts"])
@@ -37,4 +38,17 @@ async def register(
     except RegistrationError as error:
         body = ErrorResponse(detail=error.errors)
         return JSONResponse(status_code=ERROR_STATUS[error.kind], content=body.model_dump())
+    return AccountResponse.model_validate(account)
+
+
+@router.get(
+    "/me",
+    response_model=AccountResponse,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Not signed in"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Suspended or banned"},
+    },
+)
+async def me(account: CurrentAccount) -> AccountResponse:
+    """The signed-in account's own profile (FR-009)."""
     return AccountResponse.model_validate(account)

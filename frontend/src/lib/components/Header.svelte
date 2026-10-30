@@ -3,6 +3,7 @@
   import { afterNavigate } from '$app/navigation';
   import Brand from './Brand.svelte';
   import Icon from './Icon.svelte';
+  import { session } from '#lib/accounts/session.svelte.ts';
 
   let open = $state(false);
   afterNavigate(() => {
@@ -46,9 +47,16 @@
       </div>
       <div class="header-actions">
         <span class="currency-label">Ukraine <span aria-hidden="true">·</span> UAH</span>
-        <a class="button button-dark button-small" href="/register"
-          >Get started <Icon name="arrow" size={16} /></a
-        >
+        {#if session.account}
+          <a class="button button-dark button-small" href="/account"
+            >My account <Icon name="arrow" size={16} /></a
+          >
+        {:else}
+          <a class="sign-in-link" href="/sign-in">Sign in</a>
+          <a class="button button-dark button-small" href="/register"
+            >Get started <Icon name="arrow" size={16} /></a
+          >
+        {/if}
       </div>
     </nav>
   </div>
