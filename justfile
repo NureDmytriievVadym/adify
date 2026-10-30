@@ -1,34 +1,29 @@
-# List recipes
 default:
     @just --list
 
-# Install web and backend dependencies
-install:
-    npm ci
-    uv sync --project backend --frozen
+up *args:
+    docker compose up --build {{args}}
 
-# Web dev server with HMR
-web:
-    npm run dev -- --host 0.0.0.0
+down *args:
+    docker compose down {{args}}
 
-# API with reload
-backend port="8000":
-    uv run --project backend uvicorn adify_api.main:app --app-dir backend/src --reload --host 0.0.0.0 --port {{port}}
+logs *service:
+    docker compose logs -f {{service}}
 
-# Start PostgreSQL and Redis in Docker
-infra:
-    docker compose up -d postgres redis
+lint:
+    docker compose run --rm frontend npm run format:check
+    docker compose run --rm frontend npm run lint
+    docker compose run --rm frontend npm run check
+    docker compose run --rm --no-deps backend ruff check .
+    docker compose run --rm --no-deps backend ruff format --check .
 
-# Formatting, lint, Svelte/TypeScript, backend tests, production build
-check:
-    npm run format:check
-    npm run lint
-    npm run check
-    uv run --project backend ruff check backend
-    uv run --project backend ruff format --check backend
-    uv run --project backend pytest backend/tests
-    npm run build
+format:
+    docker compose run --rm frontend npm run format
+    docker compose run --rm --no-deps backend ruff format .
 
-# Playwright suite; extra args go to Playwright
+test:
+    docker compose run --rm --no-deps backend pytest
+
+# Playwright in Chromium, Firefox, WebKit; extra args go to Playwright: `just e2e --project=chromium`
 e2e *args:
-    npm run test:e2e -- {{args}}
+    docker run --rm --ipc=host -v {{quote(justfile_directory() + ":/work")}} -v /work/node_modules -v /work/frontend/node_modules -w /work mcr.microsoft.com/playwright:v1.64.1-noble sh -c "npm ci --ignore-scripts && npm run test:e2e -- {{args}}"

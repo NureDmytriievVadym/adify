@@ -1,12 +1,14 @@
 services:
-  web:
+  frontend:
     build:
       context: ../..
       dockerfile: frontend/docker/Dockerfile
     ports:
-      - '127.0.0.1:${WEB_PORT:-5173}:3000'
-    environment:
-      ORIGIN: http://localhost:${WEB_PORT:-5173}
+      - '127.0.0.1:${WEB_PORT:-5173}:5173'
+    volumes:
+      - ../..:/app
+      - /app/node_modules
+      - /app/frontend/node_modules
     init: true
     healthcheck:
       test:
@@ -14,7 +16,7 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://localhost:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 15s
       timeout: 5s

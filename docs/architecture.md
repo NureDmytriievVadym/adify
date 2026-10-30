@@ -37,16 +37,16 @@ separate readiness check when the application acquires mandatory dependencies.
 
 ## Local services
 
-`docker compose up --build` builds Node and Python services and starts PostgreSQL
-18 and Redis. Only web and API ports are published, bound to loopback. PostgreSQL
-18 stores its volume at `/var/lib/postgresql` using the version-specific internal
-layout. Redis has append-only persistence. Containers run web/API as non-root.
-
-Native web development uses Vite HMR; backend development uses uvicorn reload.
-Compose runs built applications and can be used for reproducibility checks. Local
-Compose traffic is HTTP; production TLS termination, deployment secrets, backup
-automation, runtime monitoring, and deployment workflows belong to infrastructure
-and operational work. No external services are needed for the preview.
+`just up` (`docker-compose.yml`) builds development images for the web and API
+and starts PostgreSQL 18 and Redis. Source is bind-mounted: the web runs Vite HMR
+and the backend uvicorn reload. Only web and API ports are published, bound to
+loopback. PostgreSQL 18 stores its volume at `/var/lib/postgresql` using the
+version-specific internal layout. Redis has append-only persistence. CI starts
+the same stack. Production images are not defined yet; they belong to the
+deployment work. Local Compose traffic is HTTP; production TLS termination,
+deployment secrets, backup automation, runtime monitoring, and deployment
+workflows belong to infrastructure and operational work. No external services
+are needed for the preview.
 
 ## UI extension
 
