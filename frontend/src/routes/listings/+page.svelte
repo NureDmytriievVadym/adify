@@ -3,6 +3,25 @@
   import ListingCard from '#lib/components/ListingCard.svelte';
   import PreviewNotice from '#lib/components/PreviewNotice.svelte';
   import Icon from '#lib/components/Icon.svelte';
+  import LiveListingCard from '#lib/components/LiveListingCard.svelte';
+  import { fetchListings, type ListResult, type ListingType } from '#lib/listings/api.ts';
+
+  const filters: { label: string; type?: ListingType }[] = [
+    { label: 'All' },
+    { label: 'Offers', type: 'offer' },
+    { label: 'Ad requests', type: 'request' },
+  ];
+
+  let type: ListingType | undefined = $state();
+  let live: ListResult | null = $state(null);
+
+  $effect(() => {
+    live = null;
+    const current = type;
+    fetchListings({ type: current }).then((result) => {
+      if (type === current) live = result;
+    });
+  });
 </script>
 
 <svelte:head
@@ -21,6 +40,31 @@
       next advertising partnership could look like.
     </p>
   </div>
+  <section aria-labelledby="live-title">
+    <h2 id="live-title" class="account-title">Latest listings</h2>
+    <div class="filter-bar" role="group" aria-label="Listing type">
+      {#each filters as filter (filter.label)}
+        <button
+          class="button button-outline button-small"
+          type="button"
+          aria-pressed={type === filter.type}
+          onclick={() => (type = filter.type)}>{filter.label}</button
+        >
+      {/each}
+    </div>
+    {#if !live}
+      <p class="field-hint" role="status">Loading listings…</p>
+    {:else if !live.ok}
+      <p class="form-alert" role="alert">{live.message}</p>
+    {:else if live.items.length === 0}
+      <p class="field-hint">No listings yet. <a href="/listings/new">Publish the first one.</a></p>
+    {:else}
+      <div class="listing-grid marketplace-grid live-grid">
+        {#each live.items as listing (listing.id)}<LiveListingCard {listing} />{/each}
+      </div>
+    {/if}
+  </section>
+  <h2 class="account-title sample-heading">Example listings</h2>
   <PreviewNotice />
   <div class="marketplace-toolbar">
     <div><Icon name="search" /><span>Search and filters are coming soon</span></div>
