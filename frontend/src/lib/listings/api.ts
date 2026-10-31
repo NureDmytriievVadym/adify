@@ -185,22 +185,35 @@ export async function uploadAttachment(
   }
 }
 
-export type ListResult = { ok: true; items: ApiListing[] } | { ok: false; message: string };
+export type ListResult =
+  { ok: true; items: ApiListing[]; total: number } | { ok: false; message: string };
 
-// `mine` lists the signed-in account's own listings; otherwise all public ones, optionally by type.
-export async function fetchListings(options: {
+export interface ListQuery {
   mine?: boolean;
   type?: ListingType;
-}): Promise<ListResult> {
-  const query = new URLSearchParams({ limit: '50' });
+  category?: string;
+  /** FR-016 search term; the API matches title, description, and category. */
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// `mine` lists the signed-in account's own listings; otherwise all public ones.
+export async function fetchListings(options: ListQuery = {}): Promise<ListResult> {
+  const query = new URLSearchParams({ limit: String(options.limit ?? 50) });
   if (options.type) query.set('type', options.type);
+  if (options.category) query.set('category', options.category);
+  if (options.search?.trim()) query.set('q', options.search.trim());
+  if (options.offset) query.set('offset', String(options.offset));
   const path = options.mine ? 'listings/mine' : 'listings';
   try {
     const response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/${path}?${query}`, {
       headers: options.mine ? authorization() : undefined,
     });
-    if (response.ok)
-      return { ok: true, items: ((await response.json()) as { items: ApiListing[] }).items };
+    if (response.ok) {
+      const body = (await response.json()) as { items: ApiListing[]; total: number };
+      return { ok: true, items: body.items, total: body.total };
+    }
   } catch {
     // Falls through to the generic message below.
   }

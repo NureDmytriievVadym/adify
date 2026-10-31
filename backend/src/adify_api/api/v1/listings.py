@@ -86,11 +86,16 @@ async def list_listings(
     page: PageDep,
     type: Annotated[ListingType | None, Query()] = None,
     category: Annotated[ListingCategory | None, Query()] = None,
+    q: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
 ) -> ListingPage:
-    """Public listings, newest first, optionally filtered by type and category."""
+    """Public listings, newest first, optionally searched and filtered (FR-015, FR-016).
+
+    ``q`` matches the title, description, or category slug without regard to case;
+    surrounding spaces are ignored.
+    """
     limit, offset = page
     listings, total = await service.list_listings(
-        session, type_=type, category=category, limit=limit, offset=offset
+        session, type_=type, category=category, search=q, limit=limit, offset=offset
     )
     return ListingPage(items=[ListingResponse.from_model(item) for item in listings], total=total)
 

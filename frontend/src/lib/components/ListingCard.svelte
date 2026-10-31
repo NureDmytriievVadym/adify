@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { getCategory, formatUah, type DemoListing } from '#lib/demo/marketplace.ts';
+  import type { DemoListing } from '#lib/demo/marketplace.ts';
+  import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import Icon from './Icon.svelte';
   import ListingArtwork from './ListingArtwork.svelte';
   let { listing }: { listing: DemoListing } = $props();
@@ -11,7 +12,7 @@
   >
   <div class="card-content">
     <div class="card-category">
-      <span>{getCategory(listing.categoryId).name}</span><span
+      <span>{categoryName(listing.categoryId)}</span><span
         class:request={listing.type === 'request'}
         class="type-badge">{listing.type === 'offer' ? 'Offer' : 'Ad request'}</span
       >

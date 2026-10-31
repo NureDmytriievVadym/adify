@@ -1,7 +1,7 @@
 import re
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import Account
@@ -16,6 +16,14 @@ from adify_api.listings.models import (
 from adify_api.listings.schemas import OfferCreate, RequestCreate
 
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+LIKE_ESCAPE = "\\"
+
+
+def _like_pattern(text: str) -> str:
+    """Escape LIKE wildcards so user input is matched literally (FR-016)."""
+    escaped = text.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2)
+    escaped = escaped.replace("%", f"{LIKE_ESCAPE}%").replace("_", f"{LIKE_ESCAPE}_")
+    return f"%{escaped}%"
 
 
 class ListingError(Exception):
@@ -61,10 +69,14 @@ async def list_listings(
     type_: ListingType | None = None,
     category: ListingCategory | None = None,
     owner_id: uuid.UUID | None = None,
+    search: str | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> tuple[list[Listing], int]:
-    """Newest first; ``owner_id`` narrows the list to one account's own listings."""
+    """Newest first; ``search`` matches title, description, or category.
+
+    ``owner_id`` narrows the list to one account's own listings.
+    """
     filters = []
     if type_ is not None:
         filters.append(Listing.type == type_)
@@ -72,6 +84,15 @@ async def list_listings(
         filters.append(Listing.category == category)
     if owner_id is not None:
         filters.append(Listing.owner_id == owner_id)
+    if search and (term := search.strip()):
+        pattern = _like_pattern(term)
+        filters.append(
+            or_(
+                Listing.title.ilike(pattern, escape=LIKE_ESCAPE),
+                Listing.description.ilike(pattern, escape=LIKE_ESCAPE),
+                cast(Listing.category, String).ilike(pattern, escape=LIKE_ESCAPE),
+            )
+        )
     total = await session.scalar(select(func.count()).select_from(Listing).where(*filters))
     listings = await session.scalars(
         select(Listing)

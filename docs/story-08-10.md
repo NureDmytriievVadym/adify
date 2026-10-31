@@ -80,10 +80,11 @@ mounted at `/app/storage`), limited by `ADIFY_MAX_ATTACHMENT_BYTES` and
   shown per field and the first one receives focus. The listing is created first, then
   the files are uploaded one by one; if an upload fails the listing stays published
   and the failed files are listed. The header and the account page link to the form.
-- `/listings` shows the latest published listings above the six labeled examples, with
-  an All / Offers / Ad requests filter; `/listings/mine` (header and account page) shows
-  the signed-in user's own listings. Search, category filters and sorting remain story #7,
-  which should also remove the example fixtures.
+- `/listings` shows the latest published listings with an All / Offers / Ad requests
+  filter; `/listings/mine` (header and account page) shows the signed-in user's own
+  listings. Search, type and category navigation were delivered in ADY-007. The six
+  design fixtures are kept only for the read-only sample order and its linked sample
+  listing, not the public feed; sorting and the full filter set remain ADY-011.
 - `/listings/<id>` loads the listing from the API in the browser and shows the
   category, description, specification, price or budget in UAH, delivery time, owner
   display name and attachments (images inline, PDF/MP4 as links). The six example

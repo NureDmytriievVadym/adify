@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const LISTING_ID = '0b6f1d0e-5c3a-4a53-9f37-1d2f5b8c9a10';
+const REQUEST_ID = '1b6f1d0e-5c3a-4a53-9f37-1d2f5b8c9a11';
 const PNG = Buffer.from('89504e470d0a1a0a0000000000000000', 'hex');
 
 type Role = 'customer' | 'provider';
@@ -67,11 +68,31 @@ async function mockApi(page: Page, role: Role | null) {
       });
     }
     if (path.endsWith('/listings')) {
-      const type = new URL(request.url()).searchParams.get('type');
+      const params = new URL(request.url()).searchParams;
+      const type = params.get('type');
+      const category = params.get('category');
+      const term = params.get('q')?.toLowerCase();
       const items = [
-        listing('offer', { title: 'A provider offering' }),
-        listing('request', { id: 'x', title: 'A customer request' }),
-      ].filter((item) => !type || item.type === type);
+        listing('offer', {
+          id: LISTING_ID,
+          title: 'A provider offering',
+          description: 'A website banner placement on a design journal.',
+          category: 'website-banners',
+        }),
+        listing('request', {
+          id: REQUEST_ID,
+          title: 'A customer request',
+          description: 'A sponsored article about a small homeware brand.',
+          category: 'sponsored-articles',
+        }),
+      ]
+        .filter((item) => !type || item.type === type)
+        .filter((item) => !category || item.category === category)
+        .filter(
+          (item) =>
+            !term ||
+            `${item.title} ${item.description} ${item.category}`.toLowerCase().includes(term),
+        );
       return route.fulfill({ status: 200, headers, json: { items, total: items.length } });
     }
     if (path.endsWith(`/listings/${LISTING_ID}`)) {
@@ -208,6 +229,10 @@ test('shows a published listing with its specification and attachments', async (
   await expect(page.getByText('3,500.50 UAH')).toBeVisible();
   await expect(page.getByText('Estimated delivery: 5 days')).toBeVisible();
   await expect(page.getByText('728 × 90 px')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Reveal phone number' })).toHaveAttribute(
+    'href',
+    '/sign-in',
+  );
   await expect(page.getByRole('link', { name: /banner\.png/ })).toBeVisible();
   await expect(page.getByText('olena@example.com')).toHaveCount(0);
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag21a']).analyze();
@@ -260,4 +285,77 @@ test('guests are asked to sign in to see their listings', async ({ page }) => {
   await page.goto('/listings/mine');
 
   await expect(page.getByText('Sign in to see your listings.')).toBeVisible();
+});
+
+// ADY-007 search and browsing
+
+test('a guest searches public listings from the marketplace URL', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings?q=banner');
+
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
+  await expect(page.getByText('1 result for “banner”')).toBeVisible();
+
+  const search = page.getByLabel('Search listings');
+  await search.fill('article');
+  await expect(page).toHaveURL('/listings?q=article');
+  await expect(page.getByRole('link', { name: 'A customer request' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Clear search field' }).click();
+  await expect(page).toHaveURL('/listings');
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toBeVisible();
+});
+
+test('an empty search has a clear recovery action', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings?q=nothing-matches');
+
+  await expect(
+    page.getByRole('heading', { name: 'No listings match “nothing-matches”.' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+  await expect(page).toHaveURL('/listings');
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+});
+
+test('category navigation filters the public feed and can be cleared', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings?category=website-banners');
+
+  await expect(page.getByText('Category: Website banners')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Clear category' }).click();
+  await expect(page).toHaveURL('/listings');
+  await expect(page.getByRole('link', { name: 'A customer request' })).toBeVisible();
+});
+
+test('360px live listings use one column and open details', async ({ page }) => {
+  await mockApi(page, null);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/listings');
+
+  const cards = page.locator('.listing-card');
+  await expect(cards).toHaveCount(2);
+  const first = await cards.nth(0).boundingBox();
+  const second = await cards.nth(1).boundingBox();
+  expect(first?.x).toBe(second?.x);
+  expect(second!.y).toBeGreaterThan(first!.y + first!.height);
+
+  await cards.nth(0).getByRole('link').first().click();
+  await expect(page).toHaveURL(`/listings/${LISTING_ID}`);
+  await expect(page.getByRole('heading', { name: 'Placement specification' })).toBeVisible();
+});
+
+test('the home page highlights the latest public listings', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/');
+
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag21a']).analyze();
+  expect(results.violations).toEqual([]);
 });
