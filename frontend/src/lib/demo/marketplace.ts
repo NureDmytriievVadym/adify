@@ -172,4 +172,5 @@ export const demoListings: DemoListing[] = [
 ];
 
 export const getCategory = (id: string) => categories.find((category) => category.id === id)!;
-export const formatUah = (amount: number) => `${new Intl.NumberFormat('en-US').format(amount)} UAH`;
+export const formatUah = (amount: number) =>
+  `${new Intl.NumberFormat('en-US', { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2 }).format(amount)} UAH`;

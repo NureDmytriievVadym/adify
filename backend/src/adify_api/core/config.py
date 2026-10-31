@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     refresh_cookie_secure: bool = False
+    # Local disk for listing attachments; a deployment should mount durable storage here.
+    storage_dir: str = "storage"
+    max_attachment_bytes: int = 10 * 1024 * 1024
+    max_attachments: int = 5
 
 
 @lru_cache

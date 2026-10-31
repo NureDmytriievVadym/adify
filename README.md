@@ -50,8 +50,8 @@ justfile         Developer commands
 ```
 
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),
-[story #1](docs/story-01.md), [story #3](docs/story-03.md), and
-[story #4](docs/story-04.md). The supplied **Adify – SRS v1.2.md** is the
+[story #1](docs/story-01.md), [story #3](docs/story-03.md),
+[story #4](docs/story-04.md), and [listings ADY-008–010](docs/story-08-10.md). The supplied **Adify – SRS v1.2.md** is the
 source of truth and takes precedence over the product backlog. The source
 documents are supplied alongside this repository and are not modified here.
 

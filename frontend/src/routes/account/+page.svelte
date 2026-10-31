@@ -47,6 +47,13 @@
           listings, and place orders. Verification is coming in a later release.
         </p>
       {/if}
+      {#if session.account.role === 'customer' || session.account.role === 'provider'}
+        <a class="button button-dark register-submit" href="/listings/new"
+          >{session.account.role === 'customer' ? 'Create an ad request' : 'Create an ad offering'}
+          <Icon name="arrow" /></a
+        >
+      {/if}
+      <a class="button button-outline register-submit" href="/listings/mine">My listings</a>
       <button class="button button-outline register-submit" type="button" onclick={leave}
         >Sign out</button
       >
