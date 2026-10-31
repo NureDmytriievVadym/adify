@@ -1,57 +1,9 @@
 import type { IconName } from '#lib/components/Icon.svelte';
+import { categories } from '#lib/listings/catalog.ts';
 
-// Presentation fixtures, not an API contract. Replace in the listing stories.
-export const categories: {
-  id: string;
-  name: string;
-  short: string;
-  icon: IconName;
-  description: string;
-}[] = [
-  {
-    id: 'website-banners',
-    name: 'Website banners',
-    short: 'Website banners',
-    icon: 'globe',
-    description: 'A place on the pages your customers visit.',
-  },
-  {
-    id: 'sponsored-articles',
-    name: 'Sponsored articles',
-    short: 'Sponsored articles',
-    icon: 'article',
-    description: 'Give your story room to be read.',
-  },
-  {
-    id: 'social-media-posts',
-    name: 'Social media posts',
-    short: 'Social media',
-    icon: 'social',
-    description: 'Join the conversations that matter.',
-  },
-  {
-    id: 'video-integrations',
-    name: 'Video integrations',
-    short: 'Video integrations',
-    icon: 'video',
-    description: 'Put your brand in the next great watch.',
-  },
-  {
-    id: 'stream-ads',
-    name: 'Stream ads',
-    short: 'Stream ads',
-    icon: 'stream',
-    description: 'Be part of the live moment.',
-  },
-  {
-    id: 'in-app-mobile-ads',
-    name: 'In-app mobile ads',
-    short: 'In-app mobile ads',
-    icon: 'mobile',
-    description: 'Meet people in their everyday apps.',
-  },
-];
+export { categories, formatUah } from '#lib/listings/catalog.ts';
 
+// ADY-007 proof-of-concept cards for the design story; real listing screens use the API.
 export type DemoListing = {
   slug: string;
   categoryId: string;
@@ -171,6 +123,6 @@ export const demoListings: DemoListing[] = [
   },
 ];
 
-export const getCategory = (id: string) => categories.find((category) => category.id === id)!;
-export const formatUah = (amount: number) =>
-  `${new Intl.NumberFormat('en-US', { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2 }).format(amount)} UAH`;
+/** Categories as selectable search and filter values. */
+export const categoryOptions = categories.map(({ id, name }) => ({ id, name }));
+export type CategoryIcon = IconName;

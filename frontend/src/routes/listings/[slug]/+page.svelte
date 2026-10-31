@@ -1,7 +1,7 @@
 <script lang="ts">
   import { PUBLIC_API_BASE_URL } from '$app/env/public';
   import type { PageData } from './$types';
-  import { getCategory, formatUah } from '#lib/demo/marketplace.ts';
+  import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
     fetchListing,
     formatDelivery,
@@ -14,6 +14,7 @@
   import ListingArtwork from '#lib/components/ListingArtwork.svelte';
   import PreviewNotice from '#lib/components/PreviewNotice.svelte';
   import Icon from '#lib/components/Icon.svelte';
+  import { session } from '#lib/accounts/session.svelte.ts';
 
   let { data }: { data: PageData } = $props();
 
@@ -91,7 +92,7 @@
   ><title>{view ? `${view.title} — Adify` : 'Listing — Adify'}</title>
   {#if view?.sample}<meta
       name="description"
-      content={`Sample ${getCategory(view.categoryId).name.toLowerCase()} listing. ${view.title}. Explore the Adify website preview.`}
+      content={`Sample ${categoryName(view.categoryId).toLowerCase()} listing. ${view.title}. Explore the Adify website preview.`}
     />{/if}</svelte:head
 >
 
@@ -108,7 +109,7 @@
       <div class="detail-main">
         <div class="detail-title">
           <span class="eyebrow"
-            >{getCategory(view.categoryId).name} · {view.type === 'offer'
+            >{categoryName(view.categoryId)} · {view.type === 'offer'
               ? 'Advertising offer'
               : 'Ad request'}</span
           >
@@ -177,14 +178,21 @@
           <div class="preview-actions" aria-describedby="contact-note">
             <button class="button button-dark" type="button" disabled
               >Start chat <Icon name="social" size={18} /></button
-            ><button class="button button-outline" type="button" disabled
-              >Reveal phone number</button
             >
+            {#if !view.sample && !session.account}
+              <a class="button button-outline" href="/sign-in">Reveal phone number</a>
+            {:else}
+              <button class="button button-outline" type="button" disabled
+                >Reveal phone number</button
+              >
+            {/if}
           </div>
           <p id="contact-note" class="small-note">
             {view.sample
               ? 'Contact actions are unavailable in this preview. In the marketplace, they require a signed-in account with verified email and phone.'
-              : 'Chat and phone numbers are coming in a later release. They will require a signed-in account with verified email and phone.'}
+              : !session.account
+                ? 'Sign in to reveal the owner’s phone number. Email addresses are never shown to other users.'
+                : 'Phone reveal and chat are coming in a later release. They will require verified email and phone.'}
           </p>
         </div>
         <div class="sidebar-note">

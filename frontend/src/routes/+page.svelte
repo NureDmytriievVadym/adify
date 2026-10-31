@@ -1,9 +1,15 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte';
   import ListingArtwork from '#lib/components/ListingArtwork.svelte';
-  import ListingCard from '#lib/components/ListingCard.svelte';
-  import PreviewNotice from '#lib/components/PreviewNotice.svelte';
-  import { categories, demoListings } from '#lib/demo/marketplace.ts';
+  import LiveListingCard from '#lib/components/LiveListingCard.svelte';
+  import { categories } from '#lib/listings/catalog.ts';
+  import { fetchListings, type ListResult } from '#lib/listings/api.ts';
+
+  let latest: ListResult | null = $state(null);
+
+  $effect(() => {
+    fetchListings({ limit: 3 }).then((result) => (latest = result));
+  });
 </script>
 
 <svelte:head
@@ -60,7 +66,7 @@
     </div>
     <ul class="category-grid">
       {#each categories as category (category.id)}<li>
-          <a href={`/listings#${category.id}`}
+          <a href={`/listings?category=${category.id}`}
             ><span class="category-icon"><Icon name={category.icon} size={24} /></span><span
               >{category.short}</span
             ><Icon name="arrow" size={15} /></a
@@ -78,10 +84,26 @@
     </div>
     <a href="/listings" class="text-link">Explore all listings <Icon name="arrow" size={18} /></a>
   </div>
-  <PreviewNotice />
-  <div class="listing-grid">
-    {#each demoListings.slice(0, 3) as listing (listing.slug)}<ListingCard {listing} />{/each}
-  </div>
+  {#if !latest}
+    <p class="field-hint" role="status">Loading the latest listings…</p>
+  {:else if !latest.ok}
+    <div class="home-listings-fallback">
+      <p>Fresh listings are unavailable right now.</p>
+      <a class="text-link" href="/listings">Visit the marketplace <Icon name="arrow" size={18} /></a
+      >
+    </div>
+  {:else if latest.items.length === 0}
+    <div class="home-listings-fallback">
+      <p>New advertising offers and requests will appear here.</p>
+      <a class="text-link" href="/listings"
+        >Browse the marketplace <Icon name="arrow" size={18} /></a
+      >
+    </div>
+  {:else}
+    <div class="listing-grid">
+      {#each latest.items as listing (listing.id)}<LiveListingCard {listing} />{/each}
+    </div>
+  {/if}
 </section>
 
 <section class="container connection-section" aria-labelledby="connection-heading">

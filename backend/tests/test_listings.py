@@ -381,3 +381,76 @@ async def test_my_listings_requires_sign_in(client: AsyncClient):
     response = await client.get("/api/v1/listings/mine")
 
     assert response.status_code == 401
+
+
+# ADY-007 search (FR-016)
+
+
+async def test_search_matches_title_description_and_category(
+    client: AsyncClient, customer, provider
+):
+    offer = (await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)).json()
+    request = (
+        await client.post("/api/v1/listings/requests", json=REQUEST, headers=customer)
+    ).json()
+
+    by_title = (await client.get("/api/v1/listings", params={"q": "design journal"})).json()
+    by_description = (await client.get("/api/v1/listings", params={"q": "display banner"})).json()
+    by_category = (await client.get("/api/v1/listings", params={"q": "sponsored"})).json()
+
+    assert [item["id"] for item in by_title["items"]] == [offer["id"]]
+    assert [item["id"] for item in by_description["items"]] == [offer["id"]]
+    assert [item["id"] for item in by_category["items"]] == [request["id"]]
+    assert by_title["total"] == 1
+
+
+async def test_search_is_case_insensitive_and_trims_spaces(client: AsyncClient, provider):
+    await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    response = await client.get("/api/v1/listings", params={"q": "  DESIGN  "})
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+
+
+async def test_search_treats_wildcards_literally(client: AsyncClient, provider):
+    await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    for term in ("%", "_", "\\"):
+        response = await client.get("/api/v1/listings", params={"q": term})
+        assert response.json()["total"] == 0, term
+
+
+async def test_search_without_matches_returns_an_empty_page(client: AsyncClient, provider):
+    await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    response = await client.get("/api/v1/listings", params={"q": "nothing like this"})
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0}
+
+
+async def test_search_combines_with_type_and_respects_paging(client: AsyncClient, provider):
+    for _ in range(3):
+        await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    offers = (
+        await client.get(
+            "/api/v1/listings", params={"q": "banner", "type": "offer", "limit": 2, "offset": 0}
+        )
+    ).json()
+    requests = (
+        await client.get("/api/v1/listings", params={"q": "banner", "type": "request"})
+    ).json()
+
+    assert offers["total"] == 3
+    assert len(offers["items"]) == 2
+    assert all(item["type"] == "offer" for item in offers["items"])
+    assert requests["total"] == 0
+
+
+@pytest.mark.parametrize("term", ["", "x" * 101])
+async def test_search_rejects_invalid_length(client: AsyncClient, term: str):
+    response = await client.get("/api/v1/listings", params={"q": term})
+
+    assert response.status_code == 422

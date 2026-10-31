@@ -3197,3 +3197,141 @@ main:focus {
     grid-row: 1 / span 2;
   }
 }
+
+/* ADY-007: public browsing and search */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+  border: 1px solid #ccd6c9;
+  border-radius: 6px;
+  background: white;
+  color: #738764;
+}
+.search-field:focus-within {
+  outline: 3px solid #49724b;
+  outline-offset: 2px;
+}
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+}
+.search-field input:focus {
+  outline: none;
+}
+.search-field input::-webkit-search-cancel-button {
+  display: none;
+}
+.search-clear {
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: #eef1e8;
+  color: #5a6a4f;
+}
+.search-clear:hover {
+  background: #e2e8d8;
+}
+.search-bar > .button {
+  padding-block: 15px;
+  white-space: nowrap;
+}
+.filter-bar {
+  margin: 0 0 8px;
+}
+.results-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.results-heading .account-title {
+  margin-bottom: 0;
+}
+.results-count {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.listings-empty {
+  margin-top: 20px;
+}
+.empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .search-bar {
+    flex-wrap: wrap;
+  }
+  .search-bar > .button {
+    width: 100%;
+  }
+  .results-heading {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+.active-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.active-filter .text-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--green);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home-listings-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  border: 1px dashed #d4ddca;
+  border-radius: 8px;
+  padding: 28px;
+}
+.home-listings-fallback p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
