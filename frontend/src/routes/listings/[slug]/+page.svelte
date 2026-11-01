@@ -5,6 +5,9 @@
   import {
     fetchListing,
     formatDelivery,
+    revealPhone,
+    startChat,
+    type ContactResult,
     formatSize,
     type ApiAudience,
     type Attachment,
@@ -20,6 +23,8 @@
   let { data }: { data: PageData } = $props();
 
   interface View {
+    id: string | null;
+    ownerId: string | null;
     sample: boolean;
     categoryId: string;
     type: ListingType;
@@ -57,6 +62,8 @@
     if (data.demo) {
       const { categoryId, type, title, description, owner, price, delivery, placement } = data.demo;
       return {
+        id: null,
+        ownerId: null,
         sample: true,
         categoryId,
         type,
@@ -74,6 +81,8 @@
     if (!live?.ok) return null;
     const { listing } = live;
     return {
+      id: listing.id,
+      ownerId: listing.owner.id,
       sample: false,
       categoryId: listing.category,
       type: listing.type,
@@ -88,6 +97,42 @@
       attachments: listing.attachments,
     };
   });
+
+  let phone: string | null = $state(null);
+  let contactResult: (ContactResult & { ok: false }) | { ok: true; message: string } | null =
+    $state(null);
+  let contacting = $state(false);
+
+  $effect(() => {
+    void data.listingId;
+    phone = null;
+    contactResult = null;
+  });
+
+  async function reveal() {
+    if (!view?.id) return;
+    contacting = true;
+    const result = await revealPhone(view.id);
+    contacting = false;
+    if (result.ok) {
+      phone = result.phone ?? null;
+      contactResult = null;
+    } else contactResult = result;
+  }
+
+  async function chat() {
+    if (!view?.id) return;
+    contacting = true;
+    const result = await startChat(view.id);
+    contacting = false;
+    // Every rule passed; only the chat itself is still to come (501).
+    contactResult =
+      !result.ok && result.type === 'chat_not_available'
+        ? { ok: true, message: result.message }
+        : result.ok
+          ? { ok: true, message: 'Chat started.' }
+          : result;
+  }
 
   const attachmentUrl = (attachment: Attachment) => `${PUBLIC_API_BASE_URL}${attachment.url}`;
 
@@ -210,25 +255,57 @@
           <div class="delivery-info">
             <Icon name="clock" size={18} /><span>Estimated delivery: {view.delivery}</span>
           </div>
-          <div class="preview-actions" aria-describedby="contact-note">
-            <button class="button button-dark" type="button" disabled
-              >Start chat <Icon name="social" size={18} /></button
-            >
-            {#if !view.sample && !session.account}
-              <a class="button button-outline" href="/sign-in">Reveal phone number</a>
-            {:else}
-              <button class="button button-outline" type="button" disabled
-                >Reveal phone number</button
-              >
+          {#if !view.sample && session.account && view.ownerId === session.account.id}
+            <p class="small-note">This is your listing.</p>
+          {:else}
+            <div class="preview-actions" aria-describedby="contact-note">
+              {#if view.sample}
+                <button class="button button-dark" type="button" disabled
+                  >Start chat <Icon name="social" size={18} /></button
+                >
+                <button class="button button-outline" type="button" disabled
+                  >Reveal phone number</button
+                >
+              {:else if !session.account}
+                <a class="button button-dark" href="/sign-in"
+                  >Start chat <Icon name="social" size={18} /></a
+                >
+                <a class="button button-outline" href="/sign-in">Reveal phone number</a>
+              {:else}
+                <button
+                  class="button button-dark"
+                  type="button"
+                  disabled={contacting}
+                  onclick={chat}>Start chat <Icon name="social" size={18} /></button
+                >
+                {#if phone}
+                  <a class="button button-outline revealed-phone" href={`tel:${phone}`}>{phone}</a>
+                {:else}
+                  <button
+                    class="button button-outline"
+                    type="button"
+                    disabled={contacting}
+                    onclick={reveal}>Reveal phone number</button
+                  >
+                {/if}
+              {/if}
+            </div>
+            {#if contactResult}
+              <p class={contactResult.ok ? 'small-note' : 'field-error'} role="alert">
+                {contactResult.message}
+                {#if !contactResult.ok && contactResult.type === 'verification_required'}
+                  <a class="text-link" href="/account#verification">Verify now</a>
+                {/if}
+              </p>
             {/if}
-          </div>
-          <p id="contact-note" class="small-note">
-            {view.sample
-              ? 'Contact actions are unavailable in this preview. In the marketplace, they require a signed-in account with verified email and phone.'
-              : !session.account
-                ? 'Sign in to reveal the owner’s phone number. Email addresses are never shown to other users.'
-                : 'Phone reveal and chat are coming in a later release. They will require verified email and phone.'}
-          </p>
+            <p id="contact-note" class="small-note">
+              {view.sample
+                ? 'Contact actions are unavailable in this preview. In the marketplace, they require a signed-in account with verified email and phone.'
+                : !session.account
+                  ? 'Sign in to reveal the owner’s phone number or start a chat. Email addresses are never shown to other users.'
+                  : 'Revealing the phone number and starting a chat need a verified email address and phone number. Email addresses are never shown to other users.'}
+            </p>
+          {/if}
         </div>
         <div class="sidebar-note">
           <Icon name="shield" size={22} />

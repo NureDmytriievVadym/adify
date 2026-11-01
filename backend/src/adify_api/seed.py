@@ -34,6 +34,7 @@ from adify_api.listings.models import (
     ListingCategory,
     ListingType,
 )
+from adify_api.verification.models import VerificationCode
 
 DEFAULT_PASSWORD = "AdifyDemo123"
 DEMO_DOMAIN = "demo.adify.app"
@@ -345,6 +346,9 @@ async def reset_demo_data(
             await session.execute(delete(Listing).where(Listing.id.in_(listing_ids)))
         await session.execute(delete(AccountBan).where(AccountBan.account_id.in_(account_ids)))
         await session.execute(delete(RefreshToken).where(RefreshToken.account_id.in_(account_ids)))
+        await session.execute(
+            delete(VerificationCode).where(VerificationCode.account_id.in_(account_ids))
+        )
         await session.execute(delete(Account).where(Account.id.in_(account_ids)))
         await session.commit()
         result.accounts_removed = len(accounts)
@@ -385,6 +389,9 @@ async def seed_demo_data(
                     phone=spec.phone,
                     password_hash=hash_password(password),
                     role=spec.role,
+                    # Demo accounts stand in for users who already finished FR-004/FR-005.
+                    email_verified=True,
+                    phone_verified=True,
                 )
                 session.add(account)
                 await session.flush()

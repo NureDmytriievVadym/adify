@@ -7,6 +7,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000000000000', 'hex');
 
 type Role = 'customer' | 'provider';
 
+// Creating listings needs verified contacts (FR-008); verification.spec.ts covers the blocked path.
 const accountFor = (role: Role) => ({
   id: '1',
   display_name: 'Olena Koval',
@@ -14,8 +15,8 @@ const accountFor = (role: Role) => ({
   phone: '+380671234567',
   role,
   status: 'active',
-  email_verified: false,
-  phone_verified: false,
+  email_verified: true,
+  phone_verified: true,
 });
 
 // The preview runs without the API; credentialed CORS needs the exact origin echoed back.

@@ -46,3 +46,25 @@ async def get_current_account(
 
 
 CurrentAccount = Annotated[Account, Depends(get_current_account)]
+
+
+def get_verified_account(account: CurrentAccount) -> Account:
+    """FR-008: phone reveals, chats, listings, and orders need both contacts verified."""
+    missing = [
+        name
+        for name, verified in (
+            ("email address", account.email_verified),
+            ("phone number", account.phone_verified),
+        )
+        if not verified
+    ]
+    if missing:
+        raise auth_error(
+            403,
+            "verification_required",
+            f"Verify your {' and '.join(missing)} to continue.",
+        )
+    return account
+
+
+VerifiedAccount = Annotated[Account, Depends(get_verified_account)]

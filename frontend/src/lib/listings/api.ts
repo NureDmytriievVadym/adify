@@ -312,3 +312,34 @@ export async function fetchListing(id: string): Promise<FetchResult> {
   }
   return { ok: false, notFound: false, message: 'The listing could not be loaded. Try again.' };
 }
+
+export type ContactResult =
+  { ok: true; phone?: string } | { ok: false; type: string; message: string };
+
+// FR-024–FR-026: the API checks verification and chat rules; the page only shows the outcome.
+async function contact(id: string, action: 'phone-reveal' | 'chats'): Promise<ContactResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/listings/${id}/${action}`, {
+      method: 'POST',
+      headers: authorization(),
+    });
+  } catch {
+    return {
+      ok: false,
+      type: 'unreachable',
+      message: 'Adify is unreachable. Try again in a moment.',
+    };
+  }
+  if (response.ok) {
+    return action === 'phone-reveal'
+      ? { ok: true, phone: ((await response.json()) as { phone: string }).phone }
+      : { ok: true };
+  }
+  const [error] = await errorsOf(response);
+  const type = (error as (ApiError & { type?: string }) | undefined)?.type ?? 'unknown';
+  return { ok: false, type, message: error?.msg ?? 'This action is not available.' };
+}
+
+export const revealPhone = (id: string) => contact(id, 'phone-reveal');
+export const startChat = (id: string) => contact(id, 'chats');

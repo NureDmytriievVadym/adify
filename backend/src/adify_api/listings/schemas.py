@@ -163,3 +163,7 @@ def _audience_from_model(listing: Listing) -> Audience | None:
 class ListingPage(BaseModel):
     items: list[ListingResponse]
     total: int
+
+
+class PhoneReveal(BaseModel):
+    phone: str

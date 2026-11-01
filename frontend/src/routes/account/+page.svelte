@@ -1,9 +1,23 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import Icon from '#lib/components/Icon.svelte';
   import { session, signOut } from '#lib/accounts/session.svelte.ts';
+  import VerificationStep from '#lib/components/VerificationStep.svelte';
+  import { fetchStatus, type VerificationStatus } from '#lib/accounts/verification.ts';
 
   const status = (verified: boolean) => (verified ? 'Verified' : 'Not verified');
+  // The verification email links here with its code so it can be entered with one click.
+  const emailCode = $derived(page.url.searchParams.get('email_code') ?? '');
+
+  let verification: VerificationStatus | null = $state(null);
+  let statusFor: string | null = null;
+  $effect(() => {
+    const id = session.account?.id ?? null;
+    if (!id || id === statusFor) return;
+    statusFor = id;
+    fetchStatus().then((result) => (verification = result));
+  });
 
   async function leave() {
     await signOut();
@@ -41,12 +55,7 @@
           <dd>{session.account.phone} · {status(session.account.phone_verified)}</dd>
         </div>
       </dl>
-      {#if !session.account.email_verified || !session.account.phone_verified}
-        <p class="field-hint">
-          Verify your email address and phone number to reveal phone numbers, start chats, create
-          listings, and place orders. Verification is coming in a later release.
-        </p>
-      {/if}
+
       {#if session.account.role === 'customer' || session.account.role === 'provider'}
         <a class="button button-dark register-submit" href="/listings/new"
           >{session.account.role === 'customer' ? 'Create an ad request' : 'Create an ad offering'}
@@ -57,6 +66,31 @@
       <button class="button button-outline register-submit" type="button" onclick={leave}
         >Sign out</button
       >
+    </section>
+    <section
+      class="register-card verification-card"
+      id="verification"
+      aria-labelledby="verify-title"
+    >
+      <h2 id="verify-title" class="account-title">Verification</h2>
+      <p class="field-hint">
+        {session.account.email_verified && session.account.phone_verified
+          ? 'Your email address and phone number are verified. You can reveal phone numbers, start chats, create listings, and place orders.'
+          : 'Verify your email address and phone number to reveal phone numbers, start chats, create listings, and place orders.'}
+      </p>
+      <VerificationStep
+        channel="email"
+        destination={session.account.email}
+        verified={session.account.email_verified}
+        status={verification?.email}
+        initialCode={emailCode}
+      />
+      <VerificationStep
+        channel="phone"
+        destination={session.account.phone}
+        verified={session.account.phone_verified}
+        status={verification?.phone}
+      />
     </section>
   {:else if session.restored}
     <section class="register-card">

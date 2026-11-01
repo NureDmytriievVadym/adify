@@ -167,6 +167,13 @@ async def get_listing(session: AsyncSession, listing_id: uuid.UUID) -> Listing:
     return listing
 
 
+def ensure_can_chat(listing: Listing, account: Account) -> None:
+    if listing.owner_id == account.id:
+        raise ListingError(403, "own_listing", "You cannot start a chat about your own listing.")
+    if listing.owner.role == account.role:
+        raise ListingError(403, "same_role_chat", "Chats connect one customer and one provider.")
+
+
 def ensure_owner(listing: Listing, account: Account) -> None:
     if listing.owner_id != account.id:
         raise ListingError(403, "not_listing_owner", "Only the owner can change this listing.")

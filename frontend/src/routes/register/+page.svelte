@@ -85,9 +85,9 @@
       <span class="success-mark" aria-hidden="true"><Icon name="check" size={22} /></span>
       <h2 id="success-title">Welcome, {account.display_name}.</h2>
       <p>
-        Your {account.role} account for <strong>{account.email}</strong> has been created. Verify your
-        email address and phone number to reveal phone numbers, start chats, create listings, and place
-        orders. Verification is coming in a later release.
+        Your {account.role} account for <strong>{account.email}</strong> has been created. We emailed
+        a six-digit verification code to it. Sign in to enter the code and verify your phone number; both
+        are needed to reveal phone numbers, start chats, create listings, and place orders.
       </p>
       <a class="button button-dark" href="/sign-in">Sign in <Icon name="arrow" /></a>
     </section>

@@ -1,6 +1,7 @@
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,8 +9,12 @@ from adify_api.accounts.schemas import AccountResponse, ErrorResponse, Registrat
 from adify_api.accounts.service import RegistrationError, register_account
 from adify_api.auth.dependencies import CurrentAccount
 from adify_api.core.db import get_session
+from adify_api.core.mail import DeliveryError
+from adify_api.verification import service as verification
+from adify_api.verification.models import VerificationChannel
 
 router = APIRouter(prefix="/accounts", tags=["Accounts"])
+logger = logging.getLogger(__name__)
 
 ERROR_STATUS = {"banned": status.HTTP_403_FORBIDDEN, "taken": status.HTTP_409_CONFLICT}
 
@@ -30,15 +35,27 @@ ERROR_STATUS = {"banned": status.HTTP_403_FORBIDDEN, "taken": status.HTTP_409_CO
     },
 )
 async def register(
-    data: RegistrationRequest, session: Annotated[AsyncSession, Depends(get_session)]
+    data: RegistrationRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    background: BackgroundTasks,
 ) -> AccountResponse | JSONResponse:
-    """Register a customer or provider account; staff accounts are never created here."""
+    """Register a customer or provider account and email it a verification code."""
     try:
         account = await register_account(session, data)
     except RegistrationError as error:
         body = ErrorResponse(detail=error.errors)
         return JSONResponse(status_code=ERROR_STATUS[error.kind], content=body.model_dump())
+    code, _ = await verification.issue_code(session, account, VerificationChannel.EMAIL)
+    background.add_task(_deliver_welcome_code, account, code)
     return AccountResponse.model_validate(account)
+
+
+async def _deliver_welcome_code(account, code: str) -> None:
+    # A mail outage must not fail registration; the user can request the code again.
+    try:
+        await verification.deliver_code(account, VerificationChannel.EMAIL, code)
+    except DeliveryError:
+        logger.exception("Could not email the verification code to account %s", account.id)
 
 
 @router.get(
