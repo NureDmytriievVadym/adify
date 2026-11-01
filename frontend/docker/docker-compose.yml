@@ -27,7 +27,6 @@ services:
         - action: sync
           path: ../../frontend
           target: /app/frontend
-          initial_sync: true
           ignore:
             - node_modules/
             - .svelte-kit/
