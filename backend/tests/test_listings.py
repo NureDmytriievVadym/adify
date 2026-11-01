@@ -1,10 +1,14 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from adify_api.core.config import get_settings
+from adify_api.listings.models import Listing
 
 pytestmark = pytest.mark.anyio
 
@@ -381,3 +385,336 @@ async def test_my_listings_requires_sign_in(client: AsyncClient):
     response = await client.get("/api/v1/listings/mine")
 
     assert response.status_code == 401
+
+
+# ADY-007 search (FR-016)
+
+
+async def test_search_matches_title_description_and_category(
+    client: AsyncClient, customer, provider
+):
+    offer = (await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)).json()
+    request = (
+        await client.post("/api/v1/listings/requests", json=REQUEST, headers=customer)
+    ).json()
+
+    by_title = (await client.get("/api/v1/listings", params={"q": "design journal"})).json()
+    by_description = (await client.get("/api/v1/listings", params={"q": "display banner"})).json()
+    by_category = (await client.get("/api/v1/listings", params={"q": "sponsored"})).json()
+
+    assert [item["id"] for item in by_title["items"]] == [offer["id"]]
+    assert [item["id"] for item in by_description["items"]] == [offer["id"]]
+    assert [item["id"] for item in by_category["items"]] == [request["id"]]
+    assert by_title["total"] == 1
+
+
+async def test_search_is_case_insensitive_and_trims_spaces(client: AsyncClient, provider):
+    await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    response = await client.get("/api/v1/listings", params={"q": "  DESIGN  "})
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+
+
+async def test_search_treats_wildcards_literally(client: AsyncClient, provider):
+    await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    for term in ("%", "_", "\\"):
+        response = await client.get("/api/v1/listings", params={"q": term})
+        assert response.json()["total"] == 0, term
+
+
+async def test_search_without_matches_returns_an_empty_page(client: AsyncClient, provider):
+    await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    response = await client.get("/api/v1/listings", params={"q": "nothing like this"})
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0}
+
+
+async def test_search_combines_with_type_and_respects_paging(client: AsyncClient, provider):
+    for _ in range(3):
+        await client.post("/api/v1/listings/offers", json=OFFER, headers=provider)
+
+    offers = (
+        await client.get(
+            "/api/v1/listings", params={"q": "banner", "type": "offer", "limit": 2, "offset": 0}
+        )
+    ).json()
+    requests = (
+        await client.get("/api/v1/listings", params={"q": "banner", "type": "request"})
+    ).json()
+
+    assert offers["total"] == 3
+    assert len(offers["items"]) == 2
+    assert all(item["type"] == "offer" for item in offers["items"])
+    assert requests["total"] == 0
+
+
+@pytest.mark.parametrize("term", ["", "x" * 101])
+async def test_search_rejects_invalid_length(client: AsyncClient, term: str):
+    response = await client.get("/api/v1/listings", params={"q": term})
+
+    assert response.status_code == 422
+
+
+# ADY-011 filters, audience, and sorting (FR-082, FR-084–FR-086)
+
+
+def offer(**overrides: object) -> dict[str, object]:
+    return OFFER | overrides
+
+
+async def publish(client: AsyncClient, headers: dict[str, str], body: dict[str, object]):
+    response = await client.post("/api/v1/listings/offers", json=body, headers=headers)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def test_listing_accepts_a_target_audience(client: AsyncClient, provider):
+    audience = {
+        "age_min": 18,
+        "age_max": 34,
+        "country": "Ukraine",
+        "socioeconomic": "Middle income",
+        "traits": ["Gamers", "Students"],
+    }
+
+    listing = await publish(client, provider, offer(audience=audience))
+
+    assert listing["audience"] == audience
+
+
+async def test_listing_without_audience_returns_null(client: AsyncClient, provider):
+    listing = await publish(client, provider, offer())
+
+    assert listing["audience"] is None
+
+
+@pytest.mark.parametrize(
+    "audience",
+    [
+        {"age_min": 30, "age_max": 18},
+        {"age_min": -1},
+        {"age_max": 121},
+        {"country": "x" * 101},
+        {"traits": ["x" * 51]},
+        {"traits": ["ok"] * 21},
+        {"unknown": "value"},
+    ],
+)
+async def test_rejects_invalid_audience(client: AsyncClient, provider, audience):
+    response = await client.post(
+        "/api/v1/listings/offers", json=offer(audience=audience), headers=provider
+    )
+
+    assert response.status_code == 422
+
+
+async def test_filters_by_price_range_in_uah(client: AsyncClient, provider):
+    cheap = await publish(client, provider, offer(price_uah="1000"))
+    middle = await publish(client, provider, offer(price_uah="3500.50"))
+    await publish(client, provider, offer(price_uah="9000"))
+
+    response = await client.get(
+        "/api/v1/listings", params={"price_min": "1000", "price_max": "4000"}
+    )
+
+    body = response.json()
+    assert body["total"] == 2
+    assert {item["id"] for item in body["items"]} == {cheap["id"], middle["id"]}
+
+
+async def test_price_bounds_are_inclusive(client: AsyncClient, provider):
+    listing = await publish(client, provider, offer(price_uah="3500.50"))
+
+    exact = await client.get(
+        "/api/v1/listings", params={"price_min": "3500.50", "price_max": "3500.50"}
+    )
+
+    assert [item["id"] for item in exact.json()["items"]] == [listing["id"]]
+
+
+async def test_rejects_inverted_price_range(client: AsyncClient, provider):
+    await publish(client, provider, offer())
+
+    response = await client.get(
+        "/api/v1/listings", params={"price_min": "5000", "price_max": "1000"}
+    )
+
+    assert response.status_code == 422
+    assert error_type(response) == "invalid_price_range"
+
+
+async def test_filters_by_maximum_delivery_time(client: AsyncClient, provider):
+    fast = await publish(client, provider, offer(delivery_days=2))
+    await publish(client, provider, offer(delivery_days=10))
+
+    response = await client.get("/api/v1/listings", params={"delivery_max": 3})
+
+    assert [item["id"] for item in response.json()["items"]] == [fast["id"]]
+
+
+async def test_audience_ages_match_overlapping_ranges(client: AsyncClient, provider):
+    young = await publish(client, provider, offer(audience={"age_min": 18, "age_max": 24}))
+    broad = await publish(client, provider, offer(audience={"age_min": 18, "age_max": 45}))
+    older = await publish(client, provider, offer(audience={"age_min": 55, "age_max": 70}))
+
+    overlapping = await client.get("/api/v1/listings", params={"age_min": 30, "age_max": 35})
+    touching = await client.get("/api/v1/listings", params={"age_min": 20, "age_max": 24})
+    outside = await client.get("/api/v1/listings", params={"age_min": 30, "age_max": 35})
+
+    assert {item["id"] for item in overlapping.json()["items"]} == {broad["id"]}
+    assert {item["id"] for item in touching.json()["items"]} == {young["id"], broad["id"]}
+    assert older["id"] not in {item["id"] for item in outside.json()["items"]}
+    assert (await client.get("/api/v1/listings", params={"age_min": 80})).json()["total"] == 0
+
+
+async def test_open_ended_audience_is_included(client: AsyncClient, provider):
+    open_listing = await publish(client, provider, offer(audience={"age_min": 18}))
+    other = await publish(client, provider, offer(audience={"country": "Ukraine"}))
+
+    response = await client.get("/api/v1/listings", params={"age_max": 25})
+
+    assert {item["id"] for item in response.json()["items"]} == {
+        open_listing["id"],
+        other["id"],
+    }
+
+
+async def test_rejects_inverted_age_range(client: AsyncClient, provider):
+    await publish(client, provider, offer())
+
+    response = await client.get("/api/v1/listings", params={"age_min": 40, "age_max": 20})
+
+    assert response.status_code == 422
+    assert error_type(response) == "invalid_age_range"
+
+
+async def test_open_audience_matches_every_audience_filter(client: AsyncClient, provider):
+    open_listing = await publish(client, provider, offer())
+
+    for params in (
+        {"country": "Ukraine"},
+        {"socioeconomic": "middle"},
+        {"traits": ["gamers"]},
+        {"age_min": 30, "age_max": 40},
+    ):
+        response = await client.get("/api/v1/listings", params=params)
+        assert [item["id"] for item in response.json()["items"]] == [open_listing["id"]], params
+
+
+async def test_declared_audience_filters_out_other_audiences(client: AsyncClient, provider):
+    await publish(client, provider, offer(audience={"country": "Poland", "traits": ["parents"]}))
+
+    for params in ({"country": "Ukraine"}, {"traits": ["gamers"]}):
+        response = await client.get("/api/v1/listings", params=params)
+        assert response.json()["total"] == 0, params
+
+
+async def test_filters_by_country_socioeconomic_and_traits(client: AsyncClient, provider):
+    matching = await publish(
+        client,
+        provider,
+        offer(
+            audience={
+                "country": "Ukraine",
+                "socioeconomic": "Middle income",
+                "traits": ["gamers", "students"],
+            }
+        ),
+    )
+    await publish(
+        client,
+        provider,
+        offer(
+            audience={"country": "Poland", "socioeconomic": "High income", "traits": ["parents"]}
+        ),
+    )
+
+    by_country = await client.get("/api/v1/listings", params={"country": "ukra"})
+    by_income = await client.get("/api/v1/listings", params={"socioeconomic": "middle"})
+    by_trait = await client.get("/api/v1/listings", params={"traits": ["gamers"]})
+
+    for response in (by_country, by_income, by_trait):
+        assert [item["id"] for item in response.json()["items"]] == [matching["id"]]
+
+
+async def test_traits_match_any_requested_value(client: AsyncClient, provider):
+    first = await publish(client, provider, offer(audience={"traits": ["gamers"]}))
+    second = await publish(client, provider, offer(audience={"traits": ["parents"]}))
+    await publish(client, provider, offer(audience={"traits": ["commuters"]}))
+
+    response = await client.get(
+        "/api/v1/listings", params=[("traits", "gamers"), ("traits", "parents")]
+    )
+
+    assert {item["id"] for item in response.json()["items"]} == {first["id"], second["id"]}
+
+
+@pytest.mark.parametrize("traits", [["x" * 51], ["ok"] * 21])
+async def test_rejects_invalid_traits_filter(client: AsyncClient, provider, traits):
+    await publish(client, provider, offer())
+
+    response = await client.get("/api/v1/listings", params=[("traits", item) for item in traits])
+
+    assert response.status_code == 422
+    assert error_type(response) == "invalid_traits"
+
+
+async def test_sorts_by_price_and_date(
+    client: AsyncClient, provider, sessionmaker: async_sessionmaker[AsyncSession]
+):
+    cheap = await publish(client, provider, offer(price_uah="1000"))
+    expensive = await publish(client, provider, offer(price_uah="9000"))
+    # SQLite's now() has one-second resolution, so give the rows distinct timestamps.
+    now = datetime.now(UTC)
+    async with sessionmaker() as session:
+        await session.execute(
+            update(Listing)
+            .where(Listing.id == uuid.UUID(cheap["id"]))
+            .values(created_at=now - timedelta(days=2))
+        )
+        await session.execute(
+            update(Listing)
+            .where(Listing.id == uuid.UUID(expensive["id"]))
+            .values(created_at=now - timedelta(days=1))
+        )
+        await session.commit()
+
+    ascending = (await client.get("/api/v1/listings", params={"sort": "price_asc"})).json()
+    descending = (await client.get("/api/v1/listings", params={"sort": "price_desc"})).json()
+    newest = (await client.get("/api/v1/listings", params={"sort": "newest"})).json()
+    oldest = (await client.get("/api/v1/listings", params={"sort": "oldest"})).json()
+
+    assert [item["id"] for item in ascending["items"]] == [cheap["id"], expensive["id"]]
+    assert [item["id"] for item in descending["items"]] == [expensive["id"], cheap["id"]]
+    assert [item["id"] for item in newest["items"]] == [expensive["id"], cheap["id"]]
+    assert [item["id"] for item in oldest["items"]] == [cheap["id"], expensive["id"]]
+
+
+async def test_rejects_unknown_sort(client: AsyncClient):
+    response = await client.get("/api/v1/listings", params={"sort": "popular"})
+
+    assert response.status_code == 422
+
+
+async def test_filters_combine_with_search_and_type(client: AsyncClient, provider):
+    matching = await publish(
+        client,
+        provider,
+        offer(title="A banner for gamers", price_uah="2000", delivery_days=3),
+    )
+    await publish(client, provider, offer(title="A banner for families", price_uah="8000"))
+    await publish(
+        client, provider, offer(title="A video for gamers", price_uah="2000", delivery_days=10)
+    )
+
+    response = await client.get(
+        "/api/v1/listings",
+        params={"q": "banner", "type": "offer", "price_max": "3000", "delivery_max": 5},
+    )
+
+    assert [item["id"] for item in response.json()["items"]] == [matching["id"]]

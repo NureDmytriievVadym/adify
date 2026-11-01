@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -16,6 +17,7 @@ from adify_api.listings.schemas import (
     AttachmentResponse,
     ListingPage,
     ListingResponse,
+    ListingSort,
     OfferCreate,
     RequestCreate,
 )
@@ -86,11 +88,61 @@ async def list_listings(
     page: PageDep,
     type: Annotated[ListingType | None, Query()] = None,
     category: Annotated[ListingCategory | None, Query()] = None,
+    q: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    price_min: Annotated[Decimal | None, Query(ge=0, max_digits=10, decimal_places=2)] = None,
+    price_max: Annotated[Decimal | None, Query(ge=0, max_digits=10, decimal_places=2)] = None,
+    delivery_max: Annotated[int | None, Query(ge=1, le=365)] = None,
+    age_min: Annotated[int | None, Query(ge=0, le=120)] = None,
+    age_max: Annotated[int | None, Query(ge=0, le=120)] = None,
+    country: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    socioeconomic: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    traits: Annotated[list[str] | None, Query()] = None,
+    sort: ListingSort = ListingSort.NEWEST,
 ) -> ListingPage:
-    """Public listings, newest first, optionally filtered by type and category."""
+    """Public listings with search and filters (FR-015, FR-016, FR-084–FR-086).
+
+    ``q`` matches title, description, or category without regard to case. Price
+    bounds apply to the price or budget in UAH. ``delivery_max`` is the maximum
+    estimated delivery time in days. Audience bounds select listings whose declared
+    age range overlaps the requested one; absent limits are treated as open-ended.
+    ``sort`` accepts date created (``newest``/``oldest``) or price (``price_asc``/
+    ``price_desc``). Listing-owner order-history filters (FR-085) need order data
+    and arrive with the order stories.
+    """
+    if price_min is not None and price_max is not None and price_min > price_max:
+        raise _http_error(
+            ListingError(422, "invalid_price_range", "The minimum price exceeds the maximum.")
+        )
+    if age_min is not None and age_max is not None and age_min > age_max:
+        raise _http_error(
+            ListingError(422, "invalid_age_range", "The minimum age exceeds the maximum.")
+        )
+    traits = [trait for trait in traits or [] if trait.strip()]
+    if traits and (len(traits) > 20 or any(len(trait) > 50 for trait in traits)):
+        raise _http_error(
+            ListingError(
+                422,
+                "invalid_traits",
+                "Use up to 20 traits of 1 to 50 characters each.",
+            )
+        )
     limit, offset = page
     listings, total = await service.list_listings(
-        session, type_=type, category=category, limit=limit, offset=offset
+        session,
+        type_=type,
+        category=category,
+        search=q,
+        price_min=price_min,
+        price_max=price_max,
+        delivery_max=delivery_max,
+        age_min=age_min,
+        age_max=age_max,
+        country=country,
+        socioeconomic=socioeconomic,
+        traits=traits,
+        sort=sort,
+        limit=limit,
+        offset=offset,
     )
     return ListingPage(items=[ListingResponse.from_model(item) for item in listings], total=total)
 

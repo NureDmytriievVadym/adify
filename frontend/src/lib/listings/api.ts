@@ -3,12 +3,20 @@ import { session } from '#lib/accounts/session.svelte.ts';
 
 export type ListingType = 'request' | 'offer';
 export type ListingField =
-  'category' | 'title' | 'description' | 'price' | 'delivery_days' | 'specs';
+  'category' | 'title' | 'description' | 'price' | 'delivery_days' | 'specs' | 'audience';
 export type FieldErrors = Partial<Record<ListingField, string>>;
 
 export interface Spec {
   label: string;
   value: string;
+}
+
+export interface AudienceInput {
+  ageMin: string;
+  ageMax: string;
+  country: string;
+  socioeconomic: string;
+  traits: string;
 }
 
 export interface ListingInput {
@@ -18,6 +26,11 @@ export interface ListingInput {
   price: string;
   delivery_days: string;
   specs: Spec[];
+  ageMin: string;
+  ageMax: string;
+  country: string;
+  socioeconomic: string;
+  traits: string;
 }
 
 export interface Attachment {
@@ -26,6 +39,14 @@ export interface Attachment {
   content_type: string;
   size: number;
   url: string;
+}
+
+export interface ApiAudience {
+  age_min: number | null;
+  age_max: number | null;
+  country: string | null;
+  socioeconomic: string | null;
+  traits: string[];
 }
 
 export interface ApiListing {
@@ -37,6 +58,7 @@ export interface ApiListing {
   price_uah: string;
   delivery_days: number | null;
   specs: Spec[];
+  audience: ApiAudience | null;
   owner: { id: string; display_name: string; role: 'customer' | 'provider' };
   attachments: Attachment[];
 }
@@ -82,6 +104,18 @@ export function validateListing(input: ListingInput, type: ListingType): FieldEr
   else if (days !== '' && (!/^\d+$/.test(days) || Number(days) < 1 || Number(days) > 365))
     errors.delivery_days = 'Enter a whole number of days from 1 to 365.';
 
+  const ageMin = input.ageMin.trim();
+  const ageMax = input.ageMax.trim();
+  for (const [value, label] of [
+    [ageMin, 'minimum'],
+    [ageMax, 'maximum'],
+  ] as const) {
+    if (value && (!/^\d{1,3}$/.test(value) || Number(value) > 120))
+      errors.audience = `Enter a ${label} age from 0 to 120.`;
+  }
+  if (!errors.audience && ageMin && ageMax && Number(ageMin) > Number(ageMax))
+    errors.audience = 'The minimum age cannot be greater than the maximum.';
+
   for (const spec of input.specs) {
     const label = spec.label.trim();
     const value = spec.value.trim();
@@ -126,10 +160,33 @@ const apiField: Record<string, ListingField> = {
   price_uah: 'price',
   delivery_days: 'delivery_days',
   specs: 'specs',
+  audience: 'audience',
+};
+
+const audienceOf = (input: ListingInput): ApiAudience | undefined => {
+  const traits = input.traits
+    .split(',')
+    .map((trait) => trait.trim())
+    .filter(Boolean);
+  const audience: ApiAudience = {
+    age_min: input.ageMin.trim() ? Number(input.ageMin) : null,
+    age_max: input.ageMax.trim() ? Number(input.ageMax) : null,
+    country: input.country.trim() || null,
+    socioeconomic: input.socioeconomic.trim() || null,
+    traits,
+  };
+  return audience.age_min === null &&
+    audience.age_max === null &&
+    !audience.country &&
+    !audience.socioeconomic &&
+    !traits.length
+    ? undefined
+    : audience;
 };
 
 export async function createListing(type: ListingType, input: ListingInput): Promise<CreateResult> {
   const days = input.delivery_days.trim();
+  const audience = audienceOf(input);
   const body = {
     category: input.category,
     title: input.title.trim(),
@@ -139,6 +196,7 @@ export async function createListing(type: ListingType, input: ListingInput): Pro
     specs: input.specs
       .map((spec) => ({ label: spec.label.trim(), value: spec.value.trim() }))
       .filter((spec) => spec.label || spec.value),
+    ...(audience ? { audience } : {}),
   };
   let response: Response;
   try {
@@ -185,22 +243,55 @@ export async function uploadAttachment(
   }
 }
 
-export type ListResult = { ok: true; items: ApiListing[] } | { ok: false; message: string };
+export type ListResult =
+  { ok: true; items: ApiListing[]; total: number } | { ok: false; message: string };
 
-// `mine` lists the signed-in account's own listings; otherwise all public ones, optionally by type.
-export async function fetchListings(options: {
+export interface ListQuery {
   mine?: boolean;
   type?: ListingType;
-}): Promise<ListResult> {
-  const query = new URLSearchParams({ limit: '50' });
+  category?: string;
+  /** FR-016 search term; the API matches title, description, and category. */
+  search?: string;
+  priceMin?: string;
+  priceMax?: string;
+  deliveryMax?: string;
+  ageMin?: string;
+  ageMax?: string;
+  country?: string;
+  socioeconomic?: string;
+  traits?: string[];
+  sort?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// `mine` lists the signed-in account's own listings; otherwise all public ones.
+export async function fetchListings(options: ListQuery = {}): Promise<ListResult> {
+  const query = new URLSearchParams({ limit: String(options.limit ?? 50) });
   if (options.type) query.set('type', options.type);
+  if (options.category) query.set('category', options.category);
+  if (options.search?.trim()) query.set('q', options.search.trim());
+  if (options.priceMin) query.set('price_min', options.priceMin);
+  if (options.priceMax) query.set('price_max', options.priceMax);
+  if (options.deliveryMax) query.set('delivery_max', options.deliveryMax);
+  if (options.ageMin) query.set('age_min', options.ageMin);
+  if (options.ageMax) query.set('age_max', options.ageMax);
+  if (options.country?.trim()) query.set('country', options.country.trim());
+  if (options.socioeconomic?.trim()) query.set('socioeconomic', options.socioeconomic.trim());
+  for (const trait of options.traits ?? []) {
+    if (trait.trim()) query.append('traits', trait.trim());
+  }
+  if (options.sort && options.sort !== 'newest') query.set('sort', options.sort);
+  if (options.offset) query.set('offset', String(options.offset));
   const path = options.mine ? 'listings/mine' : 'listings';
   try {
     const response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/${path}?${query}`, {
       headers: options.mine ? authorization() : undefined,
     });
-    if (response.ok)
-      return { ok: true, items: ((await response.json()) as { items: ApiListing[] }).items };
+    if (response.ok) {
+      const body = (await response.json()) as { items: ApiListing[]; total: number };
+      return { ok: true, items: body.items, total: body.total };
+    }
   } catch {
     // Falls through to the generic message below.
   }

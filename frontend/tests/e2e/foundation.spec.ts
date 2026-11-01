@@ -56,21 +56,6 @@ test('mobile navigation opens, closes on Escape and follows links', async ({ pag
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('360px listings use a single column and link to details', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 });
-  await page.goto('/listings');
-  const cards = page.locator('.listing-card');
-  await expect(cards).toHaveCount(6);
-  const first = await cards.nth(0).boundingBox();
-  const second = await cards.nth(1).boundingBox();
-  expect(first?.x).toBe(second?.x);
-  expect(second!.y).toBeGreaterThan(first!.y + first!.height);
-  await cards.nth(1).getByRole('link').click();
-  await expect(page).toHaveURL('/listings/digital-daily');
-  await expect(page.getByRole('heading', { name: 'Placement specification' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Reveal phone number' })).toBeDisabled();
-});
-
 test('keyboard skip link reaches content and invalid listings return a useful 404', async ({
   page,
 }) => {

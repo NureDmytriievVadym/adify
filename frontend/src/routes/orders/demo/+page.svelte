@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte';
   import PreviewNotice from '#lib/components/PreviewNotice.svelte';
-  import { demoListings, formatUah } from '#lib/demo/marketplace.ts';
+  import { demoListings } from '#lib/demo/marketplace.ts';
+  import { formatUah } from '#lib/listings/catalog.ts';
   const listing = demoListings[1];
   const stages = [
     {
