@@ -26,6 +26,33 @@ inside the containers. Compose uses local development defaults; optional overrid
 are documented in `.env.example`. PostgreSQL 18 and Redis run on the internal
 Compose network; the backend applies database migrations on start.
 
+## Demo data
+
+With the development stack running, fill PostgreSQL with six verified demo accounts
+(three customers, three providers) and twelve listings covering all six categories:
+
+```sh
+just seed          # safe to re-run; existing demo rows are kept
+just seed --reset  # remove the demo accounts and listings, then recreate them
+```
+
+The password for every demo account is **`AdifyDemo123`**. Sign in at
+http://localhost:5173/sign-in.
+
+| Role     | Email                               | Name               |
+| -------- | ----------------------------------- | ------------------ |
+| customer | `olena.marchenko@demo.adify.app`    | Olena Marchenko    |
+| customer | `andrii.bondar@demo.adify.app`      | Andrii Bondar      |
+| customer | `tetiana.shevchenko@demo.adify.app` | Tetiana Shevchenko |
+| provider | `digital.daily@demo.adify.app`      | Digital Daily      |
+| provider | `sofiia.k@demo.adify.app`           | Sofiia K.          |
+| provider | `pocket.studio@demo.adify.app`      | Pocket Studio      |
+
+Demo data is development-only. The CLI refuses to run unless
+`ADIFY_ALLOW_SEED=true`; the `just seed` recipe sets it only for the local backend
+container. `--reset` deletes only accounts whose email ends in `@demo.adify.app`
+and their listings.
+
 ## Checks
 
 Runtime, lint, backend tests, and browser tests run in containers. Formatting writes

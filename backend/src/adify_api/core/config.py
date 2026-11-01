@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     max_attachment_bytes: int = 10 * 1024 * 1024
     max_attachments: int = 5
+    # The demo-data CLI is opt-in so it cannot accidentally run against a shared database.
+    allow_seed: bool = False
 
 
 @lru_cache
