@@ -5,7 +5,9 @@
 1. Read the relevant SRS v1.2 sections and backlog acceptance notes. The SRS takes
    precedence. Keep unresolved TBDs explicit; agree on them before implementation.
 2. Create a short-lived branch such as `feat/07-public-listings`.
-3. Run `just up` for the local stack with hot-reload.
+3. Run `just up` and leave it running. Compose Watch syncs source edits into the
+   containers; do not add bind mounts for local source. Dependency manifest edits
+   trigger an automatic image rebuild.
 
 ## Where code belongs
 
@@ -26,8 +28,9 @@ labels, descriptive links, and the mobile navigation disclosure pattern.
 
 ## Review and checks
 
-Run `just lint`, `just test`, and `just e2e`. Add meaningful tests for behavior and regression
-risks. Browser coverage includes all six preview pages, 320/360/768/1440 px layouts,
+Run `just lint`, `just test`, and `just e2e` (the stack must be running for the
+first two; `just e2e` builds its own image). `just format` runs on the host and
+needs Node.js 24 and uv. Add meaningful tests for behavior and regression risks. Browser coverage includes all six preview pages, 320/360/768/1440 px layouts,
 and axe WCAG 2.1 Level A checks on Chromium, Firefox, and WebKit. Manually verify
 the current and previous stable Chrome, Firefox, Edge, and Safari before marking
 the browser-support requirement accepted (see `docs/story-01.md`).

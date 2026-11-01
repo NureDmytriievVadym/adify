@@ -1,0 +1,8 @@
+# Test image: source is baked in, so the browser run needs no host bind mount.
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY frontend/package.json ./frontend/package.json
+RUN npm ci --ignore-scripts
+COPY frontend ./frontend
+CMD ["npm", "run", "test:e2e", "--workspace", "@adify/web"]

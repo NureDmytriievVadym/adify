@@ -1,8 +1,14 @@
 default:
     @just --list
 
+# Development stack in the foreground with Compose Watch. Ctrl+C stops watching.
+# Source edits are synced into the containers; no host bind mounts are used.
 up *args:
-    docker compose up --build --renew-anon-volumes {{args}}
+    docker compose up --build --watch {{args}}
+
+# Detached stack for checks, CI-like runs, or when you do not need live sync.
+up-detached *args:
+    docker compose up --build -d {{args}}
 
 down *args:
     docker compose down {{args}}
@@ -10,20 +16,25 @@ down *args:
 logs *service:
     docker compose logs -f {{service}}
 
+# The checks below run inside the running watcher containers, so they see synced code.
+# Start the stack with `just up` first.
 lint:
-    docker compose run --rm frontend npm run format:check
-    docker compose run --rm frontend npm run lint
-    docker compose run --rm frontend npm run check
-    docker compose run --rm --no-deps backend ruff check .
-    docker compose run --rm --no-deps backend ruff format --check .
-
-format:
-    docker compose run --rm frontend npm run format
-    docker compose run --rm --no-deps backend ruff format .
+    docker compose exec -T frontend npm run format:check
+    docker compose exec -T frontend npm run lint
+    docker compose exec -T frontend npm run check
+    docker compose exec -T backend ruff check .
+    docker compose exec -T backend ruff format --check .
 
 test:
-    docker compose run --rm --no-deps backend pytest
+    docker compose exec -T backend pytest
 
-# Playwright in Chromium, Firefox, WebKit; extra args go to Playwright: `just e2e --project=chromium`
+# Formatting writes to the host tree, so it needs the host toolchain.
+# Use format-on-save in the editor instead if Node.js/uv are not installed.
+format:
+    npm run format
+    uv run --project backend ruff format backend
+
+# Playwright image with source baked in; no bind mount and no host browsers required.
+# Extra args go to Playwright: `just e2e --project=chromium`.
 e2e *args:
-    docker run --rm --ipc=host -v {{quote(justfile_directory() + ":/work")}} -v /work/node_modules -v /work/frontend/node_modules -w /work mcr.microsoft.com/playwright:v1.64.1-noble sh -c "npm ci --ignore-scripts && npm run test:e2e -- {{args}}; status=\$?; chown -R $(id -u):$(id -g) frontend/build frontend/.svelte-kit frontend/test-results frontend/playwright-report 2>/dev/null; exit \$status"
+    docker compose run --rm --build e2e npm run test:e2e --workspace @adify/web -- {{args}}

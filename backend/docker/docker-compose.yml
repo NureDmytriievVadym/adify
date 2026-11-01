@@ -5,10 +5,6 @@ services:
       dockerfile: backend/docker/Dockerfile
     ports:
       - '127.0.0.1:${API_PORT:-8000}:8000'
-    volumes:
-      - ../../backend:/app
-      - /app/.venv
-      - uploads_data:/app/storage
     environment:
       ADIFY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-adify}:${POSTGRES_PASSWORD:-adify-local-only}@postgres:5432/${POSTGRES_DB:-adify}
       ADIFY_CORS_ORIGINS: '["http://localhost:${WEB_PORT:-5173}"]'
@@ -30,6 +26,36 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
+    develop:
+      watch:
+        # Python sources are synced into the image; uvicorn reloads them itself.
+        - action: sync
+          path: ../../backend
+          target: /app
+          ignore:
+            - .venv/
+            - __pycache__/
+            - .pytest_cache/
+            - .ruff_cache/
+            - storage/
+            - migrations/
+            - alembic.ini
+            - pyproject.toml
+            - uv.lock
+        # A new migration must be applied: restart runs `alembic upgrade head` again.
+        - action: sync+restart
+          path: ../../backend/migrations
+          target: /app/migrations
+        - action: sync+restart
+          path: ../../backend/alembic.ini
+          target: /app/alembic.ini
+        - action: rebuild
+          path: ../../backend/pyproject.toml
+        - action: rebuild
+          path: ../../backend/uv.lock
+    volumes:
+      # Runtime data, not source. Named volumes are unaffected by host file ownership.
+      - uploads_data:/app/storage
 
   postgres:
     image: postgres:18-bookworm

@@ -9,38 +9,48 @@ Install Docker with Compose and [just](https://just.systems/), then run from
 this directory:
 
 ```sh
-just up        # dev stack with hot-reload; `just` lists all recipes
+just up        # dev stack with Compose Watch; Ctrl+C stops it
+just up-detached --wait  # background stack for checks, without live sync
 ```
 
 - Website: http://localhost:5173
 - FastAPI Swagger: http://localhost:8000/docs
 - API health: http://localhost:8000/api/v1/health
 
-Source is bind-mounted: edits in `frontend/` and `backend/` reload without a
-rebuild. Rebuild (`just up` again) after changing dependencies. Compose uses
-local development defaults; optional overrides are documented in `.env.example`.
-PostgreSQL 18 and Redis run on the internal Compose network; the backend
-applies database migrations on start. The website
-currently uses explicitly labeled, local presentation fixtures.
+Source is copied into the images, and Compose Watch mirrors edits into the running
+containers. No host directory is bind-mounted, so host and container UIDs do not
+need to match. Changes under `frontend/` and `backend/` reload automatically;
+changes to `package.json`, `package-lock.json`, `pyproject.toml`, or `uv.lock`
+trigger a rebuild. Generated files (`node_modules`, `.svelte-kit`, `.venv`) stay
+inside the containers. Compose uses local development defaults; optional overrides
+are documented in `.env.example`. PostgreSQL 18 and Redis run on the internal
+Compose network; the backend applies database migrations on start.
 
 ## Checks
 
-Everything runs in containers; only Docker and just are needed on the host.
+Runtime, lint, backend tests, and browser tests run in containers. Formatting writes
+to the host tree and therefore needs Node.js 24 and uv on the host (or use your
+editor's format-on-save).
 
 ```sh
-just lint      # Prettier, ESLint, Svelte/TypeScript, Ruff
-just format    # Prettier and Ruff formatting
-just test      # backend tests
-just e2e       # Playwright: Chromium, Firefox, WebKit; `just e2e --project=chromium`
+just up        # keep the watcher running in another terminal
+just lint      # Prettier, ESLint, Svelte/TypeScript, Ruff, inside the containers
+just test      # backend tests, inside the backend container
+just e2e       # Playwright image: Chromium, Firefox, WebKit; no host browsers
+just e2e --project=chromium
+just format    # host-side Prettier and Ruff; needs Node.js 24 and uv
 ```
 
-Dependency versions are recorded in `package-lock.json` and `backend/uv.lock`.
+`just lint` and `just test` operate on the synced container state. `just format`
+edits the host tree directly. The e2e image is rebuilt from the current source,
+so it needs neither the frontend container nor a bind mount. Dependency versions
+are recorded in `package-lock.json` and `backend/uv.lock`.
 
 ## Repository
 
 ```text
 frontend/        Svelte 5 + SvelteKit, TypeScript, adapter-node
-  docker/        Dockerfile and Compose service for the website
+  docker/        Dockerfile, Playwright Dockerfile, and Compose service
 backend/         FastAPI, versioned REST API, uv-managed Python package
   docker/        Dockerfile and Compose services for API, PostgreSQL 18, Redis
 docs/            Architecture, contribution guide, story #1 scope and acceptance
