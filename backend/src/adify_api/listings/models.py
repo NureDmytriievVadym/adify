@@ -40,6 +40,12 @@ class Listing(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     delivery_days: Mapped[int | None] = mapped_column(Integer)
     specs: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
+    # FR-082: optional target audience. Permitted values are still TBD, so they are free text.
+    audience_age_min: Mapped[int | None] = mapped_column(Integer)
+    audience_age_max: Mapped[int | None] = mapped_column(Integer)
+    audience_country: Mapped[str | None] = mapped_column(String(100))
+    audience_socioeconomic: Mapped[str | None] = mapped_column(String(100))
+    audience_traits: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     owner: Mapped[Account] = relationship(lazy="selectin")

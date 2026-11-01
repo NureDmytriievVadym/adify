@@ -72,27 +72,95 @@ async function mockApi(page: Page, role: Role | null) {
       const type = params.get('type');
       const category = params.get('category');
       const term = params.get('q')?.toLowerCase();
-      const items = [
+      const priceMin = Number(params.get('price_min') ?? 0);
+      const priceMax = Number(params.get('price_max') ?? Infinity);
+      const deliveryMax = Number(params.get('delivery_max') ?? Infinity);
+      const ageMin = Number(params.get('age_min') ?? 0);
+      const ageMax = Number(params.get('age_max') ?? Infinity);
+      const country = params.get('country')?.toLowerCase();
+      const socioeconomic = params.get('socioeconomic')?.toLowerCase();
+      const traits = params.getAll('traits').map((trait) => trait.toLowerCase());
+      const invalidRange =
+        Number(params.get('price_min') ?? 0) > Number(params.get('price_max') ?? Infinity);
+      if (invalidRange) {
+        return route.fulfill({
+          status: 422,
+          headers,
+          json: {
+            detail: [
+              {
+                loc: ['query', 'price_min'],
+                msg: 'The minimum price exceeds the maximum.',
+                type: 'invalid_price_range',
+              },
+            ],
+          },
+        });
+      }
+      const items: MockListing[] = [
         listing('offer', {
           id: LISTING_ID,
           title: 'A provider offering',
           description: 'A website banner placement on a design journal.',
           category: 'website-banners',
+          price_uah: '1200.00',
+          delivery_days: 3,
+          audience: {
+            age_min: 18,
+            age_max: 40,
+            country: 'Ukraine',
+            socioeconomic: 'Middle income',
+            traits: ['gamers'],
+          },
         }),
         listing('request', {
           id: REQUEST_ID,
           title: 'A customer request',
           description: 'A sponsored article about a small homeware brand.',
           category: 'sponsored-articles',
+          price_uah: '8000.00',
+          delivery_days: 20,
+          audience: null,
         }),
       ]
         .filter((item) => !type || item.type === type)
         .filter((item) => !category || item.category === category)
+        .filter((item) => Number(item.price_uah) >= priceMin && Number(item.price_uah) <= priceMax)
+        .filter((item) => (item.delivery_days ?? Infinity) <= deliveryMax)
+        .filter(
+          (item) =>
+            !item.audience ||
+            (Number(item.audience.age_max ?? Infinity) >= ageMin &&
+              Number(item.audience.age_min ?? 0) <= ageMax),
+        )
+        .filter(
+          (item) =>
+            !country ||
+            String(item.audience?.country ?? '')
+              .toLowerCase()
+              .includes(country),
+        )
+        .filter(
+          (item) =>
+            !socioeconomic ||
+            String(item.audience?.socioeconomic ?? '')
+              .toLowerCase()
+              .includes(socioeconomic),
+        )
+        .filter((item) => {
+          if (!traits.length) return true;
+          const itemTraits = Array.isArray(item.audience?.traits) ? item.audience.traits : [];
+          return itemTraits.some((trait) => traits.includes(String(trait).toLowerCase()));
+        })
         .filter(
           (item) =>
             !term ||
             `${item.title} ${item.description} ${item.category}`.toLowerCase().includes(term),
         );
+      const sort = params.get('sort');
+      if (sort === 'price_asc') items.sort((a, b) => Number(a.price_uah) - Number(b.price_uah));
+      if (sort === 'price_desc') items.sort((a, b) => Number(b.price_uah) - Number(a.price_uah));
+      if (sort === 'oldest') items.reverse();
       return route.fulfill({ status: 200, headers, json: { items, total: items.length } });
     }
     if (path.endsWith(`/listings/${LISTING_ID}`)) {
@@ -113,7 +181,27 @@ async function mockApi(page: Page, role: Role | null) {
   return { created, uploads };
 }
 
-const listing = (type: 'request' | 'offer', body: Record<string, unknown>) => ({
+type MockListing = {
+  id: string;
+  type: 'request' | 'offer';
+  category: string;
+  title: string;
+  description: string;
+  price_uah: string;
+  delivery_days: number;
+  specs: { label: string; value: string }[];
+  audience: Record<string, unknown> | null;
+  owner: { id: string; display_name: string; role: string };
+  attachments: {
+    id: string;
+    filename: string;
+    content_type: string;
+    size: number;
+    url: string;
+  }[];
+};
+
+const listing = (type: 'request' | 'offer', body: Record<string, unknown>): MockListing => ({
   id: LISTING_ID,
   type,
   category: 'website-banners',
@@ -122,6 +210,7 @@ const listing = (type: 'request' | 'offer', body: Record<string, unknown>) => ({
   price_uah: '3500.50',
   delivery_days: 5,
   specs: [{ label: 'Dimensions', value: '728 × 90 px' }],
+  audience: null as null | Record<string, unknown>,
   owner: { id: '1', display_name: 'Olena Koval', role: 'provider' },
   attachments: [
     {
@@ -262,13 +351,114 @@ test('the marketplace shows published listings and filters them by type', async 
   await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'A customer request' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Ad requests' }).click();
+  await page.getByRole('radio', { name: 'Ad requests' }).check();
+  await page.getByRole('button', { name: 'Apply filters' }).click();
   await expect(page.getByRole('link', { name: 'A customer request' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'A provider offering' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Ad requests' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(page.getByRole('radio', { name: 'Ad requests' })).toBeChecked();
+});
+
+// ADY-011 filter sidebar
+
+test('filters by price and delivery time through the sidebar', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings');
+
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toBeVisible();
+
+  await page.getByLabel('From', { exact: true }).fill('1000');
+  await page.getByLabel('To', { exact: true }).fill('5000');
+  await page.getByLabel('Delivery time').selectOption('7');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+
+  await expect(page).toHaveURL(/price_min=1000/);
+  await expect(page).toHaveURL(/price_max=5000/);
+  await expect(page).toHaveURL(/delivery_max=7/);
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '1000–5000 UAH' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Up to 7 days' })).toBeVisible();
+});
+
+test('validates an inverted price range before applying', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings');
+
+  await page.getByLabel('From', { exact: true }).fill('5000');
+  await page.getByLabel('To', { exact: true }).fill('1000');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+
+  await expect(
+    page.getByText('The minimum price cannot be greater than the maximum.'),
+  ).toBeVisible();
+  await expect(page).not.toHaveURL(/price_min/);
+});
+
+test('filters by target audience including traits', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings');
+
+  await page.getByLabel('Age from').fill('20');
+  await page.getByLabel('Age to').fill('30');
+  await page.getByLabel('Country').fill('Ukraine');
+  await page.getByLabel('Socioeconomic background').fill('middle');
+  await page.getByLabel('Traits').fill('gamers, students');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+
+  await expect(page).toHaveURL(/age_min=20/);
+  await expect(page).toHaveURL(/age_max=30/);
+  await expect(page).toHaveURL(/country=Ukraine/);
+  await expect(page).toHaveURL(/socioeconomic=middle/);
+  await expect(page).toHaveURL(/traits=gamers/);
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
+});
+
+test('applies a sort order and survives a reload', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings');
+
+  await page.getByLabel('Sort').selectOption('price_desc');
+  await expect(page).toHaveURL(/sort=price_desc/);
+  const cards = page.locator('.listing-card h3 a');
+  await expect(cards.first()).toHaveText('A customer request');
+
+  await page.reload();
+  await expect(page.getByLabel('Sort')).toHaveValue('price_desc');
+  await expect(page.locator('.listing-card h3 a').first()).toHaveText('A customer request');
+});
+
+test('clears all filters but keeps the search term', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings?q=offering&price_min=1000&price_max=2000&delivery_max=7');
+
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear all', exact: true }).first().click();
+
+  await expect(page).toHaveURL('/listings?q=offering');
+  await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
+});
+
+test('the filter sidebar is collapsible on mobile and has no accessibility violations', async ({
+  page,
+}) => {
+  await mockApi(page, null);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/listings');
+
+  const toggle = page.getByRole('button', { name: /^Filters/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('heading', { name: /^Filters/ })).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('heading', { name: /^Filters/ })).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag21a']).analyze();
+  expect(results.violations).toEqual([]);
+
+  await page.getByRole('button', { name: 'Close filters' }).click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('my listings shows what the signed-in user published', async ({ page }) => {
@@ -295,7 +485,7 @@ test('a guest searches public listings from the marketplace URL', async ({ page 
 
   await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
-  await expect(page.getByText('1 result for “banner”')).toBeVisible();
+  await expect(page.getByText('1 listing for “banner”')).toBeVisible();
 
   const search = page.getByLabel('Search listings');
   await search.fill('article');
@@ -314,9 +504,9 @@ test('an empty search has a clear recovery action', async ({ page }) => {
   await page.goto('/listings?q=nothing-matches');
 
   await expect(
-    page.getByRole('heading', { name: 'No listings match “nothing-matches”.' }),
+    page.getByRole('heading', { name: 'No listings match these filters.' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear search field' }).click();
   await expect(page).toHaveURL('/listings');
   await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
 });
@@ -325,11 +515,12 @@ test('category navigation filters the public feed and can be cleared', async ({ 
   await mockApi(page, null);
   await page.goto('/listings?category=website-banners');
 
-  await expect(page.getByText('Category: Website banners')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Website banners' })).toBeVisible();
+  await expect(page.getByLabel('Category')).toHaveValue('website-banners');
   await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Clear category' }).click();
+  await page.getByRole('button', { name: 'Website banners' }).click();
   await expect(page).toHaveURL('/listings');
   await expect(page.getByRole('link', { name: 'A customer request' })).toBeVisible();
 });

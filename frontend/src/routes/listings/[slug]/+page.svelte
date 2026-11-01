@@ -6,6 +6,7 @@
     fetchListing,
     formatDelivery,
     formatSize,
+    type ApiAudience,
     type Attachment,
     type FetchResult,
     type ListingType,
@@ -29,6 +30,7 @@
     price: number;
     delivery: string;
     placement: Spec[];
+    audience: ApiAudience | null;
     attachments: Attachment[];
   }
 
@@ -65,6 +67,7 @@
         price,
         delivery,
         placement,
+        audience: null,
         attachments: [],
       };
     }
@@ -81,11 +84,32 @@
       price: Number(listing.price_uah),
       delivery: formatDelivery(listing.delivery_days),
       placement: listing.specs,
+      audience: listing.audience,
       attachments: listing.attachments,
     };
   });
 
   const attachmentUrl = (attachment: Attachment) => `${PUBLIC_API_BASE_URL}${attachment.url}`;
+
+  const audienceLines = (audience: ApiAudience) => {
+    const lines: { label: string; value: string }[] = [];
+    if (audience.age_min !== null || audience.age_max !== null) {
+      lines.push({
+        label: 'Age',
+        value:
+          audience.age_min !== null && audience.age_max !== null
+            ? `${audience.age_min}–${audience.age_max}`
+            : audience.age_min !== null
+              ? `${audience.age_min}+`
+              : `Up to ${audience.age_max}`,
+      });
+    }
+    if (audience.country) lines.push({ label: 'Country', value: audience.country });
+    if (audience.socioeconomic)
+      lines.push({ label: 'Socioeconomic background', value: audience.socioeconomic });
+    if (audience.traits.length) lines.push({ label: 'Traits', value: audience.traits.join(', ') });
+    return lines;
+  };
 </script>
 
 <svelte:head
@@ -136,6 +160,17 @@
                 : 'No technical requirements specified by the customer.'}
             </p>{/if}
         </section>
+        {#if view.audience}
+          <section class="detail-section">
+            <h2>Target audience</h2>
+            <dl class="specification-list">
+              {#each audienceLines(view.audience) as line (line.label)}<div>
+                  <dt>{line.label}</dt>
+                  <dd>{line.value}</dd>
+                </div>{/each}
+            </dl>
+          </section>
+        {/if}
         {#if view.attachments.length}
           <section class="detail-section">
             <h2>Attachments</h2>

@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import Icon from '#lib/components/Icon.svelte';
   import { session } from '#lib/accounts/session.svelte.ts';
-  import { categories } from '#lib/demo/marketplace.ts';
+  import { categories } from '#lib/listings/catalog.ts';
   import {
     MAX_ATTACHMENTS,
     MAX_SPECS,
@@ -36,6 +36,11 @@
     price: '',
     delivery_days: '',
     specs: [{ label: '', value: '' }],
+    ageMin: '',
+    ageMax: '',
+    country: '',
+    socioeconomic: '',
+    traits: '',
   });
   let files: File[] = $state([]);
   let fileError = $state('');
@@ -216,6 +221,64 @@
           <p class="field-error" id="delivery_days-error">{errors.delivery_days}</p>
         {/if}
       </div>
+
+      <fieldset class="filter-group audience-editor">
+        <legend>Target audience (optional)</legend>
+        <p class="field-hint">
+          Who should see this advertising? Leave any field empty when the audience is open.
+        </p>
+        <div class="filter-pair">
+          <div>
+            <label for="age_min">Age from</label>
+            <input
+              id="age_min"
+              name="age_min"
+              inputmode="numeric"
+              placeholder="18"
+              bind:value={input.ageMin}
+              aria-invalid={errors.audience ? 'true' : undefined}
+            />
+          </div>
+          <div>
+            <label for="age_max">Age to</label>
+            <input
+              id="age_max"
+              name="age_max"
+              inputmode="numeric"
+              placeholder="34"
+              bind:value={input.ageMax}
+              aria-invalid={errors.audience ? 'true' : undefined}
+            />
+          </div>
+        </div>
+        <label for="audience_country">Country</label>
+        <input
+          id="audience_country"
+          name="audience_country"
+          maxlength="100"
+          placeholder="Ukraine"
+          bind:value={input.country}
+        />
+        <label for="audience_socioeconomic">Socioeconomic background</label>
+        <input
+          id="audience_socioeconomic"
+          name="audience_socioeconomic"
+          maxlength="100"
+          placeholder="Middle income"
+          bind:value={input.socioeconomic}
+        />
+        <label for="audience_traits">Traits</label>
+        <input
+          id="audience_traits"
+          name="audience_traits"
+          maxlength="300"
+          placeholder="Gamers, students"
+          bind:value={input.traits}
+          aria-describedby="audience_traits-hint"
+        />
+        <p class="field-hint" id="audience_traits-hint">Separate traits with commas.</p>
+        {#if errors.audience}<p class="field-error" id="audience-error">{errors.audience}</p>{/if}
+      </fieldset>
 
       <fieldset
         class="spec-editor"
