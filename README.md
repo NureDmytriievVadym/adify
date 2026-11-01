@@ -16,6 +16,7 @@ just up-detached --wait  # background stack for checks, without live sync
 - Website: http://localhost:5173
 - FastAPI Swagger: http://localhost:8000/docs
 - API health: http://localhost:8000/api/v1/health
+- Mailpit (verification emails and development SMS): http://localhost:8025
 
 Source is copied into the images, and Compose Watch mirrors edits into the running
 containers. No host directory is bind-mounted, so host and container UIDs do not
@@ -89,7 +90,7 @@ justfile         Developer commands
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),
 [story #1](docs/story-01.md), [story #3](docs/story-03.md),
 [story #4](docs/story-04.md), [story #7](docs/story-07.md),
-[story #11](docs/story-11.md), and
+[story #11](docs/story-11.md), [story #5](docs/story-05.md), and
 [listings ADY-008–010](docs/story-08-10.md). The source
 documents are supplied alongside this repository and are not modified here.
 

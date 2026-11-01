@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import AccountRole
 from adify_api.accounts.schemas import ErrorResponse
-from adify_api.auth.dependencies import CurrentAccount
+from adify_api.auth.dependencies import CurrentAccount, VerifiedAccount
 from adify_api.core.config import get_settings
 from adify_api.core.db import get_session
 from adify_api.listings import service, storage
@@ -19,6 +19,7 @@ from adify_api.listings.schemas import (
     ListingResponse,
     ListingSort,
     OfferCreate,
+    PhoneReveal,
     RequestCreate,
 )
 from adify_api.listings.service import ListingError
@@ -39,7 +40,7 @@ def _http_error(error: ListingError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail=detail)
 
 
-def _require_role(account: CurrentAccount, role: AccountRole, msg: str) -> None:
+def _require_role(account: VerifiedAccount, role: AccountRole, msg: str) -> None:
     if account.role != role:
         raise _http_error(ListingError(403, "role_not_allowed", msg))
 
@@ -51,7 +52,7 @@ def _require_role(account: CurrentAccount, role: AccountRole, msg: str) -> None:
     responses=ERRORS,
 )
 async def create_request(
-    data: RequestCreate, account: CurrentAccount, session: SessionDep
+    data: RequestCreate, account: VerifiedAccount, session: SessionDep
 ) -> ListingResponse:
     """A customer publishes an ad request with a budget (ADY-008)."""
     _require_role(account, AccountRole.CUSTOMER, "Only customers can create ad requests.")
@@ -65,7 +66,7 @@ async def create_request(
     responses=ERRORS,
 )
 async def create_offer(
-    data: OfferCreate, account: CurrentAccount, session: SessionDep
+    data: OfferCreate, account: VerifiedAccount, session: SessionDep
 ) -> ListingResponse:
     """A provider publishes an ad offering with a price and delivery time (ADY-009)."""
     _require_role(account, AccountRole.PROVIDER, "Only providers can create ad offerings.")
@@ -164,6 +165,42 @@ async def get_listing(listing_id: uuid.UUID, session: SessionDep) -> ListingResp
         return ListingResponse.from_model(await service.get_listing(session, listing_id))
     except ListingError as error:
         raise _http_error(error) from None
+
+
+@router.post(
+    "/{listing_id}/phone-reveal",
+    response_model=PhoneReveal,
+    responses=ERRORS,
+)
+async def reveal_phone(
+    listing_id: uuid.UUID, account: VerifiedAccount, session: SessionDep
+) -> PhoneReveal:
+    """FR-024, FR-025: the owner's phone number, the only contact detail ever revealed."""
+    try:
+        listing = await service.get_listing(session, listing_id)
+    except ListingError as error:
+        raise _http_error(error) from None
+    return PhoneReveal(phone=listing.owner.phone)
+
+
+@router.post(
+    "/{listing_id}/chats",
+    status_code=status.HTTP_201_CREATED,
+    responses=ERRORS
+    | {status.HTTP_501_NOT_IMPLEMENTED: {"model": ErrorResponse, "description": "Not yet"}},
+)
+async def start_chat(listing_id: uuid.UUID, account: VerifiedAccount, session: SessionDep) -> None:
+    """FR-026 checks for starting a chat; the chat itself arrives with the chat story."""
+    try:
+        listing = await service.get_listing(session, listing_id)
+        service.ensure_can_chat(listing, account)
+    except ListingError as error:
+        raise _http_error(error) from None
+    raise _http_error(
+        ListingError(
+            501, "chat_not_available", "You can contact this owner. Chat opens in a later release."
+        )
+    )
 
 
 @router.post(

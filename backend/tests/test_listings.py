@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from conftest import verify_contacts
 from httpx import AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -39,7 +40,9 @@ def storage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-async def sign_up(client: AsyncClient, role: str, email: str, phone: str) -> dict[str, str]:
+async def sign_up(
+    client: AsyncClient, role: str, email: str, phone: str, sessionmaker=None
+) -> dict[str, str]:
     body = {
         "display_name": f"Test {role}",
         "email": email,
@@ -48,6 +51,8 @@ async def sign_up(client: AsyncClient, role: str, email: str, phone: str) -> dic
         "password": "secret123",
     }
     assert (await client.post("/api/v1/accounts", json=body)).status_code == 201
+    if sessionmaker is not None:
+        await verify_contacts(sessionmaker, email)
     tokens = await client.post(
         "/api/v1/auth/sign-in", json={"email": email, "password": "secret123"}
     )
@@ -55,13 +60,13 @@ async def sign_up(client: AsyncClient, role: str, email: str, phone: str) -> dic
 
 
 @pytest.fixture
-async def customer(client: AsyncClient) -> dict[str, str]:
-    return await sign_up(client, "customer", "customer@example.com", "+380671111111")
+async def customer(client: AsyncClient, sessionmaker) -> dict[str, str]:
+    return await sign_up(client, "customer", "customer@example.com", "+380671111111", sessionmaker)
 
 
 @pytest.fixture
-async def provider(client: AsyncClient) -> dict[str, str]:
-    return await sign_up(client, "provider", "provider@example.com", "+380672222222")
+async def provider(client: AsyncClient, sessionmaker) -> dict[str, str]:
+    return await sign_up(client, "provider", "provider@example.com", "+380672222222", sessionmaker)
 
 
 def error_type(response) -> str:

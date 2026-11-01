@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import Icon from '#lib/components/Icon.svelte';
   import { session } from '#lib/accounts/session.svelte.ts';
+  import { isVerified } from '#lib/accounts/verification.ts';
   import { categories } from '#lib/listings/catalog.ts';
   import {
     MAX_ATTACHMENTS,
@@ -133,6 +134,17 @@
       </ul>
       <a class="button button-dark register-submit" href={`/listings/${created.id}`}
         >View your listing <Icon name="arrow" /></a
+      >
+    </section>
+  {:else if session.account && (session.account.role === 'customer' || session.account.role === 'provider') && !isVerified(session.account)}
+    <section class="register-card" role="alert">
+      <h2 class="account-title">Verify your account first</h2>
+      <p class="field-hint">
+        Creating listings needs a verified email address and phone number, so other users know they
+        are dealing with a real person.
+      </p>
+      <a class="button button-dark register-submit" href="/account#verification"
+        >Verify now <Icon name="arrow" /></a
       >
     </section>
   {:else if session.account && (session.account.role === 'customer' || session.account.role === 'provider')}
