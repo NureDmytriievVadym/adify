@@ -5,10 +5,6 @@ services:
       dockerfile: frontend/docker/Dockerfile
     ports:
       - '127.0.0.1:${WEB_PORT:-5173}:5173'
-    volumes:
-      - ../..:/app
-      - /app/node_modules
-      - /app/frontend/node_modules
     environment:
       PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
     init: true
@@ -24,3 +20,33 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+    develop:
+      watch:
+        # Source is copied into the image; Compose Watch mirrors edits into the
+        # container, so no host directory is mounted and UIDs need not match.
+        - action: sync
+          path: ../../frontend
+          target: /app/frontend
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - .svelte-kit/
+            - build/
+            - test-results/
+            - playwright-report/
+            - docker/
+            - package.json
+        # Dependency and tooling changes invalidate the image, not only the source.
+        - action: rebuild
+          path: ../../frontend/package.json
+        - action: rebuild
+          path: ../../package.json
+        - action: rebuild
+          path: ../../package-lock.json
+
+  e2e:
+    profiles: ['e2e']
+    build:
+      context: ../..
+      dockerfile: frontend/docker/Dockerfile.e2e
+    init: true

@@ -40,7 +40,7 @@ Run:
 just lint
 just test
 just e2e
-just up -d --wait
+just up-detached --wait
 ```
 
 The Playwright suite checks all six pages at 320, 360, 768, and 1440 px in Chromium,

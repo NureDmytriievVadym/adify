@@ -46,16 +46,23 @@ separate readiness check when the application acquires mandatory dependencies.
 
 ## Local services
 
-`just up` (`docker-compose.yml`) builds development images for the web and API
-and starts PostgreSQL 18 and Redis. Source is bind-mounted: the web runs Vite HMR
-and the backend uvicorn reload. Only web and API ports are published, bound to
-loopback. PostgreSQL 18 stores its volume at `/var/lib/postgresql` using the
-version-specific internal layout. Redis has append-only persistence. CI starts
-the same stack. Production images are not defined yet; they belong to the
-deployment work. Local Compose traffic is HTTP; production TLS termination,
-deployment secrets, backup automation, runtime monitoring, and deployment
-workflows belong to infrastructure and operational work. No external services
-are needed for the preview.
+`just up` (`docker-compose.yml`) builds development images containing the source
+and starts PostgreSQL 18 and Redis under Compose Watch. Watch rules sync `frontend`
+and `backend` edits into the containers, use `sync+restart` for Alembic migrations
+and configuration, and rebuild on dependency manifests. No host source directory
+is bind-mounted, so host and container UIDs/GIDs do not need to match; generated
+files stay inside the containers. The web runs Vite HMR and the backend uses
+uvicorn reload plus an Alembic upgrade on start.
+
+Only web and API ports are published, bound to loopback. PostgreSQL 18 stores its
+volume at `/var/lib/postgresql` using the version-specific internal layout; uploads,
+PostgreSQL, and Redis use named volumes, not host paths. `just e2e` builds a
+separate Playwright image with source baked in, so tests need neither host
+browsers nor a bind mount. CI starts the same stack without watch. Production
+images are not defined yet; they belong to deployment work. Local Compose traffic
+is HTTP; production TLS termination, deployment secrets, backup automation,
+runtime monitoring, and deployment workflows belong to infrastructure and
+operational work. No external services are needed for the preview.
 
 ## UI extension
 
