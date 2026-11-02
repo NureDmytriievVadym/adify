@@ -8,5 +8,5 @@
       ><path d="M6 24 16 6l10 18h-7l-3-6-3 6Z" fill="currentColor" /></svg
     ></span
   >
-  <span>adify<span class="brand-dot">.</span></span>
+  <span>dify<span class="brand-dot">.</span></span>
 </a>

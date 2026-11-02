@@ -1,6 +1,33 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte';
-  import PreviewNotice from '#lib/components/PreviewNotice.svelte';
+
+  function pointerTilt(node: HTMLElement) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    function move(event: PointerEvent) {
+      if (event.pointerType !== 'mouse') return;
+      const bounds = node.getBoundingClientRect();
+      const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 2;
+      const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 2;
+      node.style.setProperty('--tilt-x', `${x * 7}deg`);
+      node.style.setProperty('--tilt-y', `${y * -7}deg`);
+    }
+
+    function reset() {
+      node.style.setProperty('--tilt-x', '0deg');
+      node.style.setProperty('--tilt-y', '0deg');
+    }
+
+    node.addEventListener('pointermove', move);
+    node.addEventListener('pointerleave', reset);
+
+    return {
+      destroy() {
+        node.removeEventListener('pointermove', move);
+        node.removeEventListener('pointerleave', reset);
+      },
+    };
+  }
 </script>
 
 <svelte:head
@@ -11,15 +38,41 @@
 >
 
 <div class="container page-content">
-  <div class="page-intro">
-    <span class="eyebrow">MEET ADIFY</span>
-    <h1>Your idea.<br />Their space.<br /><span>A shared possibility.</span></h1>
-    <p>
-      Adify is an internet advertising marketplace for Ukraine.<br class="desktop-break" /> Here is the
-      experience we are building for customers and providers.
-    </p>
+  <div class="how-intro-layout">
+    <div class="page-intro">
+      <span class="eyebrow">MEET ADIFY</span>
+      <h1>Your idea.<br />Their space.<br /><span>A shared possibility.</span></h1>
+      <p>
+        Adify is an internet advertising marketplace for Ukraine.<br class="desktop-break" /> Here
+        is the experience we are building for customers and providers.
+      </p>
+    </div>
+    <div class="how-visual" aria-hidden="true">
+      <span class="how-visual-orbit"></span>
+      <span class="how-visual-label">IDEAS IN MOTION <i>✳</i></span>
+      <div class="how-compass-tilt" use:pointerTilt>
+        <svg class="how-compass-art" viewBox="0 0 400 400" fill="none">
+          <circle cx="200" cy="200" r="151" stroke="#ff584177" />
+          <circle cx="200" cy="200" r="132" stroke="#ff584144" stroke-dasharray="2 7" />
+          <g class="how-compass-ticks" stroke="#ff584199" stroke-width="2">
+            <path d="M200 37v20m0 286v20M37 200h20m286 0h20" />
+            <path d="m84.7 84.7 14.2 14.2m202.2 202.2 14.2 14.2m0-230.6-14.2 14.2M98.9 301.1l-14.2 14.2" />
+          </g>
+          <path d="m200 75 28 97 97 28-97 28-28 97-28-97-97-28 97-28z" fill="#202020" />
+          <path d="m200 75 28 97-28 28-28-28z" fill="#ff5841" />
+          <path d="m200 200 28-28 97 28-97 28z" fill="#ff806c" />
+          <path d="m200 200 28 28-28 97-28-97z" fill="#f3f2ee" />
+          <path d="m200 200-28 28-97-28 97-28z" fill="#e94734" />
+          <circle cx="200" cy="200" r="9" fill="#202020" stroke="#f3f2ee" stroke-width="3" />
+          <text x="200" y="29" text-anchor="middle" class="how-compass-direction">N</text>
+          <text x="373" y="204" text-anchor="middle" class="how-compass-direction">E</text>
+          <text x="200" y="389" text-anchor="middle" class="how-compass-direction">S</text>
+          <text x="27" y="204" text-anchor="middle" class="how-compass-direction">W</text>
+        </svg>
+      </div>
+      <span class="how-visual-caption">GOOD IDEAS MOVE FORWARD <b>↗</b></span>
+    </div>
   </div>
-  <PreviewNotice />
   <div class="audience-grid">
     <section class="audience-card">
       <span class="eyebrow">FOR CUSTOMERS</span>
