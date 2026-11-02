@@ -1,6 +1,5 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte';
-  import PreviewNotice from '#lib/components/PreviewNotice.svelte';
 </script>
 
 <svelte:head
@@ -11,15 +10,16 @@
 >
 
 <div class="container page-content">
-  <div class="page-intro">
-    <span class="eyebrow">MEET ADIFY</span>
-    <h1>Your idea.<br />Their space.<br /><span>A shared possibility.</span></h1>
-    <p>
-      Adify is an internet advertising marketplace for Ukraine.<br class="desktop-break" /> Here is the
-      experience we are building for customers and providers.
-    </p>
+  <div class="how-intro-layout">
+    <div class="page-intro">
+      <span class="eyebrow">MEET ADIFY</span>
+      <h1>Your idea.<br />Their space.<br /><span>A shared possibility.</span></h1>
+      <p>
+        Adify is an internet advertising marketplace for Ukraine.<br class="desktop-break" /> Here is
+        the experience we are building for customers and providers.
+      </p>
+    </div>
   </div>
-  <PreviewNotice />
   <div class="audience-grid">
     <section class="audience-card">
       <span class="eyebrow">FOR CUSTOMERS</span>

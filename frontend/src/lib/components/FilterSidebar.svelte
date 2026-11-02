@@ -209,13 +209,6 @@
       <p class="field-hint" id="filter-traits-hint">Separate traits with commas.</p>
     </fieldset>
 
-    <fieldset class="filter-group" disabled aria-describedby="filter-history-hint">
-      <legend>Owner track record</legend>
-      <p class="field-hint" id="filter-history-hint">
-        Completed and disputed order counts become available when orders launch.
-      </p>
-    </fieldset>
-
     <div class="filter-actions">
       <button class="button button-dark" type="submit">Apply filters</button>
       <button class="text-button" type="button" onclick={reset}>Clear all</button>

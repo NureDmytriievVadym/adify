@@ -1,6 +1,5 @@
 <script lang="ts">
   import Brand from './Brand.svelte';
-  import Icon from './Icon.svelte';
 </script>
 
 <footer class="site-footer">
@@ -19,7 +18,6 @@
       <div class="footer-note">
         <span class="eyebrow">Built for connections</span>
         <p>For the brands with a story.<br />And the people who can share it.</p>
-        <span class="footer-location"><Icon name="globe" size={16} /> Ukraine · English · UAH</span>
       </div>
     </div>
     <div class="footer-bottom">

@@ -46,7 +46,6 @@
         {/each}
       </div>
       <div class="header-actions">
-        <span class="currency-label">Ukraine <span aria-hidden="true">·</span> UAH</span>
         {#if session.account}
           <a class="sign-in-link" href="/listings/mine">My listings</a>
           <a class="sign-in-link" href="/listings/new">New listing</a>

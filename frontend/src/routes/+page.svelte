@@ -10,6 +10,34 @@
   $effect(() => {
     fetchListings({ limit: 3 }).then((result) => (latest = result));
   });
+
+  function revealOnScroll(node: HTMLElement, delay = 0) {
+    if (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    node.style.setProperty('--reveal-delay', `${delay}ms`);
+    node.classList.add('scroll-reveal');
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        node.classList.add('is-visible');
+        observer.unobserve(node);
+      },
+      { threshold: 0.12 },
+    );
+    observer.observe(node);
+
+    return {
+      destroy() {
+        observer.disconnect();
+      },
+    };
+  }
 </script>
 
 <svelte:head
@@ -22,12 +50,14 @@
 <section class="hero container" aria-labelledby="hero-heading">
   <div class="hero-copy">
     <span class="eyebrow"><span class="status-dot"></span> A SPACE FOR BETTER CONNECTIONS</span>
-    <h1 id="hero-heading">Good brands.<br />The right people.<br /><span>A little Adify.</span></h1>
-    <p>
+    <h1 id="hero-heading" use:revealOnScroll>
+      Good brands.<br />The right people.<br /><span>A little Adify.</span>
+    </h1>
+    <p use:revealOnScroll={120}>
       Find a place for your next big idea. Connect with advertising providers and bring your brand
       to the right audience.
     </p>
-    <div class="hero-actions">
+    <div class="hero-actions" use:revealOnScroll={220}>
       <a href="/listings" class="button button-dark"
         >Explore the marketplace <Icon name="arrow" size={18} /></a
       ><a href="/how-it-works" class="text-link">How it works <Icon name="chevron" size={15} /></a>
@@ -58,14 +88,26 @@
   </div>
 </section>
 
+<div class="category-marquee" aria-hidden="true">
+  <div class="category-marquee-track">
+    {#each [0, 1] as copy (copy)}
+      <div class="category-marquee-group">
+        {#each categories as category (category.id)}
+          <div class="category-marquee-item"><span>{category.short}</span><i>✳</i></div>
+        {/each}
+      </div>
+    {/each}
+  </div>
+</div>
+
 <section class="category-section" aria-labelledby="categories-heading">
   <div class="container">
-    <div class="section-heading compact">
+    <div class="section-heading compact" use:revealOnScroll>
       <h2 id="categories-heading">Different spaces. <span>Endless possibilities.</span></h2>
       <span class="section-aside">Internet advertising, all in one place</span>
     </div>
     <ul class="category-grid">
-      {#each categories as category (category.id)}<li>
+      {#each categories as category, index (category.id)}<li use:revealOnScroll={index * 70}>
           <a href={`/listings?category=${category.id}`}
             ><span class="category-icon"><Icon name={category.icon} size={24} /></span><span
               >{category.short}</span
@@ -77,8 +119,8 @@
 </section>
 
 <section class="container section-space" aria-labelledby="listings-heading">
-  <div class="section-heading">
-    <div>
+  <div class="section-heading" use:revealOnScroll>
+    <div use:revealOnScroll={100}>
       <span class="eyebrow">THE MARKETPLACE</span>
       <h2 id="listings-heading">Your next partnership<br />could start here.</h2>
     </div>
@@ -101,13 +143,15 @@
     </div>
   {:else}
     <div class="listing-grid">
-      {#each latest.items as listing (listing.id)}<LiveListingCard {listing} />{/each}
+      {#each latest.items as listing, index (listing.id)}<div use:revealOnScroll={index * 100}>
+          <LiveListingCard {listing} />
+        </div>{/each}
     </div>
   {/if}
 </section>
 
 <section class="container connection-section" aria-labelledby="connection-heading">
-  <div class="connection-intro">
+  <div class="connection-intro" use:revealOnScroll>
     <span class="eyebrow">A LITTLE LESS BACK AND FORTH</span>
     <h2 id="connection-heading">Great partnerships<br />start with a good fit.</h2>
     <p>
@@ -117,7 +161,7 @@
     <a href="/how-it-works" class="text-link">Get to know Adify <Icon name="arrow" size={18} /></a>
   </div>
   <ol class="connection-steps">
-    <li>
+    <li use:revealOnScroll={0}>
       <span>01</span>
       <div>
         <h3>Find your people</h3>
@@ -125,7 +169,7 @@
       </div>
       <Icon name="search" size={22} />
     </li>
-    <li>
+    <li use:revealOnScroll={100}>
       <span>02</span>
       <div>
         <h3>Get on the same page</h3>
@@ -133,7 +177,7 @@
       </div>
       <Icon name="social" size={22} />
     </li>
-    <li>
+    <li use:revealOnScroll={200}>
       <span>03</span>
       <div>
         <h3>Make something happen</h3>
@@ -145,7 +189,7 @@
 </section>
 
 <section class="container final-section">
-  <div class="final-banner">
+  <div class="final-banner" use:revealOnScroll>
     <span class="banner-spark" aria-hidden="true">✳</span>
     <div>
       <span class="eyebrow">BIG IDEAS DESERVE THE RIGHT SPACE</span>
