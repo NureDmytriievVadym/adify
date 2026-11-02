@@ -3686,7 +3686,8 @@ main:focus {
 body {
   color: var(--ink);
   background:
-    linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), #20202008 100%) 0 0 / 80px 80px,
+    linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), #20202008 100%) 0 0 / 80px
+      80px,
     var(--paper);
 }
 
@@ -3831,9 +3832,11 @@ body {
   color: #f3f2ee;
   background:
     linear-gradient(90deg, transparent 49.9%, #ffffff0d 50%, transparent 50.1%),
-    linear-gradient(#ffffff0b 1px, transparent 1px),
-    var(--night);
-  background-size: 100% 100%, 100% 80px, auto;
+    linear-gradient(#ffffff0b 1px, transparent 1px), var(--night);
+  background-size:
+    100% 100%,
+    100% 80px,
+    auto;
   border-radius: 5px;
 }
 
@@ -4053,7 +4056,9 @@ body {
   border: 1px solid #ff584177;
   border-radius: 50%;
   background: transparent;
-  box-shadow: 0 0 0 25px #ff584114, 0 0 0 50px #ff58410d;
+  box-shadow:
+    0 0 0 25px #ff584114,
+    0 0 0 50px #ff58410d;
   transform: none;
 }
 
@@ -4899,7 +4904,13 @@ body {
 .video-art::after {
   top: 17%;
   background:
-    linear-gradient(145deg, transparent 0 38%, var(--accent) 38% 68%, #f3f2ee 68% 71%, transparent 71%),
+    linear-gradient(
+      145deg,
+      transparent 0 38%,
+      var(--accent) 38% 68%,
+      #f3f2ee 68% 71%,
+      transparent 71%
+    ),
     #383838;
   box-shadow: 6px 6px 0 var(--accent);
   transform: rotate(7deg);
@@ -4962,7 +4973,9 @@ body {
 
 .stream-rings {
   border-color: #f3f2ee55;
-  box-shadow: 0 0 0 25px #f3f2ee0d, 0 0 0 50px #ff584114;
+  box-shadow:
+    0 0 0 25px #f3f2ee0d,
+    0 0 0 50px #ff584114;
 }
 
 .article-art {
@@ -5212,4 +5225,3 @@ body {
 .how-intro-layout > .page-intro {
   max-width: none;
 }
-

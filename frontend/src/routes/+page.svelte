@@ -50,7 +50,9 @@
 <section class="hero container" aria-labelledby="hero-heading">
   <div class="hero-copy">
     <span class="eyebrow"><span class="status-dot"></span> A SPACE FOR BETTER CONNECTIONS</span>
-    <h1 id="hero-heading" use:revealOnScroll>Good brands.<br />The right people.<br /><span>A little Adify.</span></h1>
+    <h1 id="hero-heading" use:revealOnScroll>
+      Good brands.<br />The right people.<br /><span>A little Adify.</span>
+    </h1>
     <p use:revealOnScroll={120}>
       Find a place for your next big idea. Connect with advertising providers and bring your brand
       to the right audience.
@@ -141,9 +143,9 @@
     </div>
   {:else}
     <div class="listing-grid">
-      {#each latest.items as listing, index (listing.id)}<div use:revealOnScroll={index * 100}
-          ><LiveListingCard {listing} /></div
-        >{/each}
+      {#each latest.items as listing, index (listing.id)}<div use:revealOnScroll={index * 100}>
+          <LiveListingCard {listing} />
+        </div>{/each}
     </div>
   {/if}
 </section>
