@@ -18,7 +18,9 @@ from adify_api.listings.schemas import (
     ListingPage,
     ListingResponse,
     ListingSort,
+    ListingUpdate,
     OfferCreate,
+    OwnListingResponse,
     PhoneReveal,
     RequestCreate,
 )
@@ -36,7 +38,8 @@ ERRORS = {
 
 
 def _http_error(error: ListingError) -> HTTPException:
-    detail = [{"loc": ["body"], "msg": error.msg, "type": error.type}]
+    loc = ["body", error.field] if error.field else ["body"]
+    detail = [{"loc": loc, "msg": error.msg, "type": error.type}]
     return HTTPException(status_code=error.status_code, detail=detail)
 
 
@@ -156,6 +159,51 @@ async def my_listings(account: CurrentAccount, session: SessionDep, page: PageDe
         session, owner_id=account.id, limit=limit, offset=offset
     )
     return ListingPage(items=[ListingResponse.from_model(item) for item in listings], total=total)
+
+
+@router.get("/mine/{listing_id}", response_model=OwnListingResponse, responses=ERRORS)
+async def my_listing(
+    listing_id: uuid.UUID, account: CurrentAccount, session: SessionDep
+) -> OwnListingResponse:
+    """One of your own listings, with the fields you cannot change right now (FR-017)."""
+    try:
+        listing = await service.get_listing(session, listing_id)
+        service.ensure_owner(listing, account)
+    except ListingError as error:
+        raise _http_error(error) from None
+    return OwnListingResponse.from_model(
+        listing, locked_fields=await service.locked_fields(session, listing)
+    )
+
+
+@router.patch(
+    "/{listing_id}",
+    response_model=OwnListingResponse,
+    responses=ERRORS
+    | {
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The category is locked by an active order",
+        }
+    },
+)
+async def update_listing(
+    listing_id: uuid.UUID, data: ListingUpdate, account: VerifiedAccount, session: SessionDep
+) -> OwnListingResponse:
+    """Edit your listing (FR-017). Send only the fields to change.
+
+    While the listing has an active order its category cannot change (`409
+    category_locked`); every other field stays editable. A failed rule saves nothing.
+    """
+    try:
+        listing = await service.get_listing(session, listing_id)
+        service.ensure_owner(listing, account)
+        listing = await service.update_listing(session, listing, data)
+    except ListingError as error:
+        raise _http_error(error) from None
+    return OwnListingResponse.from_model(
+        listing, locked_fields=await service.locked_fields(session, listing)
+    )
 
 
 @router.get("/{listing_id}", response_model=ListingResponse, responses=ERRORS)

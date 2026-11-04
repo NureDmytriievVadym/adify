@@ -2,9 +2,17 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
+from pydantic_core import PydanticCustomError
 
 from adify_api.accounts.models import AccountRole
 from adify_api.listings.models import Listing, ListingAttachment, ListingCategory, ListingType
@@ -13,6 +21,8 @@ Amount = Annotated[Decimal, Field(gt=0, le=Decimal("99999999.99"), decimal_place
 DeliveryDays = Annotated[int, Field(ge=1, le=365)]
 Stripped = StringConstraints(strip_whitespace=True)
 Age = Annotated[int, Field(ge=0, le=120)]
+Title = Annotated[str, Stripped, Field(min_length=5, max_length=120)]
+Description = Annotated[str, Stripped, Field(min_length=20, max_length=5000)]
 
 
 class ListingSort(StrEnum):
@@ -65,13 +75,16 @@ class Spec(BaseModel):
     value: Annotated[str, Stripped, Field(min_length=1, max_length=300)]
 
 
+Specs = Annotated[list[Spec], Field(max_length=10)]
+
+
 class _ListingCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category: ListingCategory
-    title: Annotated[str, Stripped, Field(min_length=5, max_length=120)]
-    description: Annotated[str, Stripped, Field(min_length=20, max_length=5000)]
-    specs: Annotated[list[Spec], Field(max_length=10)] = []
+    title: Title
+    description: Description
+    specs: Specs = []
     audience: Audience | None = None
 
 
@@ -83,6 +96,35 @@ class RequestCreate(_ListingCreate):
 class OfferCreate(_ListingCreate):
     price_uah: Amount
     delivery_days: DeliveryDays
+
+
+class ListingUpdate(BaseModel):
+    """FR-017: a partial update by the owner. Omitted fields keep their current value.
+
+    ``null`` clears the optional fields: an ad request's delivery time and the target
+    audience. ``specs`` and ``audience`` replace the stored values as a whole. A
+    request's amount is ``budget_uah``; an offering's is ``price_uah``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: ListingCategory | None = None
+    title: Title | None = None
+    description: Description | None = None
+    budget_uah: Amount | None = None
+    price_uah: Amount | None = None
+    delivery_days: DeliveryDays | None = None
+    specs: Specs | None = None
+    audience: Audience | None = None
+
+    @field_validator(
+        "category", "title", "description", "budget_uah", "price_uah", "specs", mode="before"
+    )
+    @classmethod
+    def required_when_sent(cls, value: Any) -> Any:
+        if value is None:
+            raise PydanticCustomError("null_not_allowed", "This field cannot be empty.")
+        return value
 
 
 class OwnerResponse(BaseModel):
@@ -128,7 +170,7 @@ class ListingResponse(BaseModel):
     created_at: datetime
 
     @classmethod
-    def from_model(cls, listing: Listing) -> "ListingResponse":
+    def from_model(cls, listing: Listing, **extra: Any) -> Self:
         return cls(
             id=listing.id,
             type=listing.type,
@@ -146,7 +188,17 @@ class ListingResponse(BaseModel):
             ),
             attachments=[AttachmentResponse.from_model(item) for item in listing.attachments],
             created_at=listing.created_at,
+            **extra,
         )
+
+
+class OwnListingResponse(ListingResponse):
+    """The owner's view of a listing, with the fields that cannot be changed right now.
+
+    FR-017: ``category`` is locked while the listing has an active order.
+    """
+
+    locked_fields: list[str]
 
 
 def _audience_from_model(listing: Listing) -> Audience | None:

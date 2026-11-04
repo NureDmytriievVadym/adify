@@ -5,11 +5,13 @@ from pathlib import Path
 import pytest
 from conftest import verify_contacts
 from httpx import AsyncClient
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from adify_api.accounts.models import Account
 from adify_api.core.config import get_settings
-from adify_api.listings.models import Listing
+from adify_api.listings.models import Listing, ListingType
+from adify_api.orders.models import Order, OrderStatus
 
 pytestmark = pytest.mark.anyio
 
@@ -723,3 +725,282 @@ async def test_filters_combine_with_search_and_type(client: AsyncClient, provide
     )
 
     assert [item["id"] for item in response.json()["items"]] == [matching["id"]]
+
+
+# FR-017: editing a listing
+
+
+async def place_order(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    listing_id: str,
+    status: OrderStatus = OrderStatus.IN_PROGRESS,
+) -> None:
+    """Orders have no API yet, so the tests insert one between the owner and another account."""
+    async with sessionmaker() as session:
+        listing = await session.get(Listing, uuid.UUID(listing_id))
+        assert listing is not None
+        other = await session.scalar(select(Account.id).where(Account.id != listing.owner_id))
+        assert other is not None
+        customer, provider = (
+            (listing.owner_id, other)
+            if listing.type == ListingType.REQUEST
+            else (other, listing.owner_id)
+        )
+        session.add(
+            Order(listing_id=listing.id, customer_id=customer, provider_id=provider, status=status)
+        )
+        await session.commit()
+
+
+async def edit(client: AsyncClient, listing_id: str, headers, body: dict[str, object]):
+    return await client.patch(f"/api/v1/listings/{listing_id}", json=body, headers=headers)
+
+
+async def test_owner_edits_the_title_and_price_and_the_listing_shows_them(
+    client: AsyncClient, provider
+):
+    listing = await publish(client, provider, OFFER)
+
+    response = await edit(
+        client, listing["id"], provider, {"title": "  A fresh banner title  ", "price_uah": "4200"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["locked_fields"] == []
+    public = (await client.get(f"/api/v1/listings/{listing['id']}")).json()
+    assert public["title"] == "A fresh banner title"
+    assert public["price_uah"] == "4200.00"
+    assert public["description"] == OFFER["description"]
+    assert public["category"] == OFFER["category"]
+    assert "locked_fields" not in public
+
+
+async def test_request_budget_changes_and_its_delivery_time_can_be_cleared(
+    client: AsyncClient, customer
+):
+    created = await client.post(
+        "/api/v1/listings/requests", json=REQUEST | {"delivery_days": 14}, headers=customer
+    )
+
+    response = await edit(
+        client, created.json()["id"], customer, {"budget_uah": "5000.50", "delivery_days": None}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["price_uah"] == "5000.50"
+    assert response.json()["delivery_days"] is None
+
+
+async def test_an_offering_keeps_a_delivery_time(client: AsyncClient, provider):
+    listing = await publish(client, provider, OFFER)
+
+    response = await edit(client, listing["id"], provider, {"delivery_days": None})
+
+    assert response.status_code == 422
+    assert error_type(response) == "delivery_required"
+    assert response.json()["detail"][0]["loc"] == ["body", "delivery_days"]
+
+
+async def test_the_amount_field_matches_the_listing_type(client: AsyncClient, customer, provider):
+    request = (
+        await client.post("/api/v1/listings/requests", json=REQUEST, headers=customer)
+    ).json()
+    offering = await publish(client, provider, OFFER)
+
+    for listing, headers, field in (
+        (request, customer, "price_uah"),
+        (offering, provider, "budget_uah"),
+    ):
+        response = await edit(client, listing["id"], headers, {field: "100"})
+        assert response.status_code == 422
+        assert error_type(response) == "amount_field_mismatch"
+        assert response.json()["detail"][0]["loc"] == ["body", field]
+
+
+async def test_category_changes_while_no_order_is_active(client: AsyncClient, provider):
+    listing = await publish(client, provider, OFFER)
+
+    response = await edit(client, listing["id"], provider, {"category": "social-media-posts"})
+
+    assert response.status_code == 200
+    assert response.json()["category"] == "social-media-posts"
+
+
+@pytest.mark.parametrize(
+    "status", [OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.DISPUTED]
+)
+async def test_an_active_order_locks_the_category_and_saves_nothing(
+    client: AsyncClient, customer, provider, sessionmaker, status
+):
+    listing = await publish(client, provider, OFFER)
+    await place_order(sessionmaker, listing["id"], status)
+
+    response = await edit(
+        client,
+        listing["id"],
+        provider,
+        {"category": "social-media-posts", "title": "This title must not be saved"},
+    )
+
+    assert response.status_code == 409
+    assert error_type(response) == "category_locked"
+    assert response.json()["detail"][0]["loc"] == ["body", "category"]
+    assert "active order" in response.json()["detail"][0]["msg"]
+    public = (await client.get(f"/api/v1/listings/{listing['id']}")).json()
+    assert public["category"] == OFFER["category"]
+    assert public["title"] == OFFER["title"]
+
+
+async def test_other_fields_stay_editable_while_an_order_is_active(
+    client: AsyncClient, customer, provider, sessionmaker
+):
+    listing = await publish(client, provider, OFFER)
+    await place_order(sessionmaker, listing["id"])
+    description = "An updated description of the banner placement and its audience."
+
+    # The web form sends the unchanged category back; that is not a change.
+    response = await edit(
+        client,
+        listing["id"],
+        provider,
+        {"category": OFFER["category"], "description": description, "delivery_days": 9},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] == description
+    assert response.json()["delivery_days"] == 9
+    assert response.json()["locked_fields"] == ["category"]
+
+
+@pytest.mark.parametrize("status", [OrderStatus.COMPLETED, OrderStatus.CANCELLED])
+async def test_closed_orders_do_not_lock_the_category(
+    client: AsyncClient, customer, provider, sessionmaker, status
+):
+    listing = await publish(client, provider, OFFER)
+    await place_order(sessionmaker, listing["id"], status)
+
+    response = await edit(client, listing["id"], provider, {"category": "stream-ads"})
+
+    assert response.status_code == 200
+    assert response.json()["locked_fields"] == []
+
+
+async def test_specs_and_audience_are_replaced_or_cleared(client: AsyncClient, provider):
+    listing = await publish(client, provider, offer(audience={"age_min": 18, "country": "Ukraine"}))
+    specs = [{"label": "Format", "value": "PNG"}, {"label": "Size", "value": "300 x 250 px"}]
+
+    replaced = await edit(
+        client, listing["id"], provider, {"specs": specs, "audience": {"traits": ["gamers"]}}
+    )
+    cleared = await edit(client, listing["id"], provider, {"specs": [], "audience": None})
+    emptied = await edit(client, listing["id"], provider, {"audience": {}})
+
+    assert replaced.json()["specs"] == specs
+    assert replaced.json()["audience"] == {
+        "age_min": None,
+        "age_max": None,
+        "country": None,
+        "socioeconomic": None,
+        "traits": ["gamers"],
+    }
+    assert cleared.json()["specs"] == []
+    assert cleared.json()["audience"] is None
+    assert emptied.status_code == 200
+    assert emptied.json()["audience"] is None
+
+
+async def test_an_empty_edit_changes_nothing(client: AsyncClient, provider):
+    listing = await publish(client, provider, OFFER)
+
+    response = await edit(client, listing["id"], provider, {})
+
+    assert response.status_code == 200
+    assert {key: value for key, value in response.json().items() if key != "locked_fields"} == (
+        listing
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "kind"),
+    [
+        ({"title": "Hi"}, "string_too_short"),
+        ({"title": None}, "null_not_allowed"),
+        ({"description": "Too short."}, "string_too_short"),
+        ({"category": "billboards"}, "enum"),
+        ({"category": None}, "null_not_allowed"),
+        ({"price_uah": "0"}, "greater_than"),
+        ({"price_uah": None}, "null_not_allowed"),
+        ({"delivery_days": 366}, "less_than_equal"),
+        ({"specs": None}, "null_not_allowed"),
+        ({"specs": [{"label": "L", "value": "v"}] * 11}, "too_long"),
+        ({"audience": {"age_min": 30, "age_max": 20}}, "value_error"),
+        ({"type": "request"}, "extra_forbidden"),
+        ({"owner_id": str(uuid.uuid4())}, "extra_forbidden"),
+    ],
+)
+async def test_rejects_invalid_edits(client: AsyncClient, provider, change, kind):
+    listing = await publish(client, provider, OFFER)
+
+    response = await edit(client, listing["id"], provider, change)
+
+    assert response.status_code == 422
+    assert error_type(response) == kind
+
+
+async def test_only_the_verified_owner_can_edit(
+    client: AsyncClient, customer, provider, sessionmaker
+):
+    listing = await publish(client, provider, OFFER)
+    other_provider = await sign_up(
+        client, "provider", "other@example.com", "+380673333333", sessionmaker
+    )
+
+    guest = await edit(client, listing["id"], {}, {"title": "A guest edit"})
+    stranger = await edit(client, listing["id"], other_provider, {"title": "A stranger edit"})
+    wrong_role = await edit(client, listing["id"], customer, {"title": "A customer edit"})
+    async with sessionmaker() as session:
+        await session.execute(
+            update(Account)
+            .where(Account.email == "provider@example.com")
+            .values(phone_verified=False)
+        )
+        await session.commit()
+    unverified = await edit(client, listing["id"], provider, {"title": "An unverified edit"})
+
+    assert guest.status_code == 401
+    assert stranger.status_code == wrong_role.status_code == 403
+    assert error_type(stranger) == error_type(wrong_role) == "not_listing_owner"
+    assert unverified.status_code == 403
+    assert error_type(unverified) == "verification_required"
+    public = (await client.get(f"/api/v1/listings/{listing['id']}")).json()
+    assert public["title"] == OFFER["title"]
+
+
+async def test_editing_an_unknown_listing_is_not_found(client: AsyncClient, provider):
+    response = await edit(client, str(uuid.uuid4()), provider, {"title": "Nothing to edit"})
+
+    assert response.status_code == 404
+    assert error_type(response) == "listing_not_found"
+
+
+async def test_owner_view_reports_the_locked_fields(
+    client: AsyncClient, customer, provider, sessionmaker
+):
+    listing = await publish(client, provider, OFFER)
+    path = f"/api/v1/listings/mine/{listing['id']}"
+
+    before = await client.get(path, headers=provider)
+    await place_order(sessionmaker, listing["id"])
+    after = await client.get(path, headers=provider)
+    stranger = await client.get(path, headers=customer)
+    guest = await client.get(path)
+    unknown = await client.get(f"/api/v1/listings/mine/{uuid.uuid4()}", headers=provider)
+
+    assert before.status_code == 200
+    assert before.json()["locked_fields"] == []
+    assert before.json()["title"] == OFFER["title"]
+    assert after.json()["locked_fields"] == ["category"]
+    assert stranger.status_code == 403
+    assert error_type(stranger) == "not_listing_owner"
+    assert guest.status_code == 401
+    assert unknown.status_code == 404
