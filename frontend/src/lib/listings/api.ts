@@ -2,6 +2,8 @@ import { PUBLIC_API_BASE_URL } from '$app/env/public';
 import { session } from '#lib/accounts/session.svelte.ts';
 
 export type ListingType = 'request' | 'offer';
+/** FR-018/FR-019: only an active listing appears in the marketplace and takes new orders. */
+export type ListingStatus = 'active' | 'paused' | 'expired';
 export type ListingField =
   'category' | 'title' | 'description' | 'price' | 'delivery_days' | 'specs' | 'audience';
 export type FieldErrors = Partial<Record<ListingField, string>>;
@@ -61,6 +63,8 @@ export interface ApiListing {
   audience: ApiAudience | null;
   owner: { id: string; display_name: string; role: 'customer' | 'provider' };
   attachments: Attachment[];
+  status: ListingStatus;
+  expires_at: string;
   /** Owner view only (FR-017): fields that cannot change right now, e.g. `category`. */
   locked_fields?: ListingField[];
 }
@@ -82,6 +86,11 @@ export const formatSize = (bytes: number) =>
   bytes < 1024 * 1024
     ? `${Math.max(1, Math.round(bytes / 1024))} KB`
     : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+export const formatDate = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).format(
+    new Date(iso),
+  );
 
 export const formatDelivery = (days: number | null) =>
   days === null ? 'To be agreed' : `${days} ${days === 1 ? 'day' : 'days'}`;
@@ -419,6 +428,36 @@ export async function fetchOwnListing(id: string): Promise<OwnListingResult> {
   }
   return { ok: false, reason: 'error', message: 'The listing could not be loaded. Try again.' };
 }
+
+export type StateResult =
+  { ok: true; listing: ApiListing } | { ok: false; type: string; message: string };
+
+// FR-018: the owner pauses or resumes a listing; the API refuses to resume an expired one.
+async function changeState(id: string, action: 'pause' | 'resume'): Promise<StateResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/listings/${id}/${action}`, {
+      method: 'POST',
+      headers: authorization(),
+    });
+  } catch {
+    return {
+      ok: false,
+      type: 'unreachable',
+      message: 'Adify is unreachable. Try again in a moment.',
+    };
+  }
+  if (response.ok) return { ok: true, listing: (await response.json()) as ApiListing };
+  const [error] = await errorsOf(response);
+  return {
+    ok: false,
+    type: error?.type ?? 'unknown',
+    message: error?.msg ?? `The listing could not be ${action}d. Try again in a moment.`,
+  };
+}
+
+export const pauseListing = (id: string) => changeState(id, 'pause');
+export const resumeListing = (id: string) => changeState(id, 'resume');
 
 export type ContactResult =
   { ok: true; phone?: string } | { ok: false; type: string; message: string };
