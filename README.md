@@ -30,8 +30,9 @@ Compose network; the backend applies database migrations on start.
 ## Demo data
 
 With the development stack running, fill PostgreSQL with six verified demo accounts
-(three customers, three providers), twelve listings covering all six categories, and
-one active order that locks the category of Digital Daily's banner offering (FR-017):
+(three customers, three providers), thirteen listings covering all six categories, and
+one active order that locks the category of Digital Daily's banner offering (FR-017).
+Digital Daily's newsletter offering is expired, so it cannot be resumed (FR-019):
 
 ```sh
 just seed          # safe to re-run; existing demo rows are kept
@@ -92,8 +93,9 @@ Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md)
 [story #1](docs/story-01.md), [story #3](docs/story-03.md),
 [story #4](docs/story-04.md), [story #7](docs/story-07.md),
 [story #11](docs/story-11.md), [story #5](docs/story-05.md),
-[listings ADY-008–010](docs/story-08-10.md), and
-[editing listings](docs/story-edit-listing.md). The source
+[listings ADY-008–010](docs/story-08-10.md),
+[editing listings](docs/story-edit-listing.md), and
+[pausing and resuming listings](docs/story-pause-resume-listing.md). The source
 documents are supplied alongside this repository and are not modified here.
 
 Executed checks and the Docker-based browser-test command are recorded in
