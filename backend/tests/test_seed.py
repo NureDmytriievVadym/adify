@@ -7,10 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from adify_api.accounts.models import Account, AccountRole
 from adify_api.core.security import verify_password
 from adify_api.listings.models import Listing
+from adify_api.listings.service import locked_fields
+from adify_api.orders.models import Order, OrderStatus
 from adify_api.seed import (
     ACCOUNTS,
     DEFAULT_PASSWORD,
     LISTINGS,
+    ORDERS,
     _account_id,
     _listing_id,
     reset_demo_data,
@@ -116,3 +119,33 @@ async def test_fixed_ids_keep_listings_attached_to_the_same_owner(sessionmaker):
     assert account is not None and listing is not None
     assert account.id == _account_id("digital-daily")
     assert listing.owner_id == account.id
+
+
+async def test_an_active_demo_order_locks_one_listing_category(sessionmaker):
+    result = await seed_demo_data(sessionmaker)
+    again = await seed_demo_data(sessionmaker)
+
+    assert result.orders_created == len(ORDERS) == 1
+    assert again.orders_created == 0
+    assert again.orders_existing == 1
+    async with sessionmaker() as session:
+        order = await session.scalar(select(Order))
+        locked = await session.get(Listing, _listing_id("banners-journal"))
+        open_ = await session.get(Listing, _listing_id("app-discovery"))
+        assert order is not None and locked is not None and open_ is not None
+        assert order.status == OrderStatus.IN_PROGRESS
+        assert order.listing_id == locked.id
+        assert order.provider_id == locked.owner_id == _account_id("digital-daily")
+        assert order.customer_id == _account_id("olena")
+        assert await locked_fields(session, locked) == ["category"]
+        assert await locked_fields(session, open_) == []
+
+
+async def test_reset_removes_demo_orders_before_their_listings(sessionmaker):
+    await seed_demo_data(sessionmaker)
+
+    removed = await reset_demo_data(sessionmaker)
+
+    assert removed.orders_removed == 1
+    async with sessionmaker() as session:
+        assert await session.scalar(select(func.count()).select_from(Order)) == 0

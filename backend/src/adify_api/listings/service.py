@@ -2,7 +2,7 @@ import re
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, cast, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import Account
@@ -14,7 +14,14 @@ from adify_api.listings.models import (
     ListingCategory,
     ListingType,
 )
-from adify_api.listings.schemas import ListingSort, OfferCreate, RequestCreate
+from adify_api.listings.schemas import (
+    Audience,
+    ListingSort,
+    ListingUpdate,
+    OfferCreate,
+    RequestCreate,
+)
+from adify_api.orders.models import ACTIVE_ORDER_STATUSES, Order
 
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 LIKE_ESCAPE = "\\"
@@ -28,11 +35,12 @@ def _like_pattern(text: str) -> str:
 
 
 class ListingError(Exception):
-    def __init__(self, status_code: int, type_: str, msg: str) -> None:
+    def __init__(self, status_code: int, type_: str, msg: str, field: str | None = None) -> None:
         super().__init__(type_)
         self.status_code = status_code
         self.type = type_
         self.msg = msg
+        self.field = field
 
 
 async def create_request(session: AsyncSession, owner: Account, data: RequestCreate) -> Listing:
@@ -57,13 +65,78 @@ async def _create(session, owner, type_, data, price, delivery_days) -> Listing:
         price=price,
         delivery_days=delivery_days,
         specs=[spec.model_dump() for spec in data.specs],
-        audience_age_min=data.audience.age_min if data.audience else None,
-        audience_age_max=data.audience.age_max if data.audience else None,
-        audience_country=data.audience.country if data.audience else None,
-        audience_socioeconomic=data.audience.socioeconomic if data.audience else None,
-        audience_traits=data.audience.traits if data.audience else [],
     )
+    _set_audience(listing, data.audience)
     session.add(listing)
+    await session.commit()
+    await session.refresh(listing)
+    return listing
+
+
+def _set_audience(listing: Listing, audience: Audience | None) -> None:
+    listing.audience_age_min = audience.age_min if audience else None
+    listing.audience_age_max = audience.age_max if audience else None
+    listing.audience_country = audience.country if audience else None
+    listing.audience_socioeconomic = audience.socioeconomic if audience else None
+    listing.audience_traits = list(audience.traits) if audience else []
+
+
+async def has_active_order(session: AsyncSession, listing_id: uuid.UUID) -> bool:
+    return bool(
+        await session.scalar(
+            select(
+                exists().where(
+                    Order.listing_id == listing_id, Order.status.in_(ACTIVE_ORDER_STATUSES)
+                )
+            )
+        )
+    )
+
+
+async def locked_fields(session: AsyncSession, listing: Listing) -> list[str]:
+    """FR-017: what the owner cannot change right now. The category is fixed while an
+    order is active, because the order was agreed for that kind of placement."""
+    return ["category"] if await has_active_order(session, listing.id) else []
+
+
+async def update_listing(session: AsyncSession, listing: Listing, data: ListingUpdate) -> Listing:
+    """Apply an owner's partial update (FR-017). Nothing is saved if any rule fails."""
+    sent = data.model_fields_set
+    is_request = listing.type == ListingType.REQUEST
+    wrong_amount = "price_uah" if is_request else "budget_uah"
+    if wrong_amount in sent:
+        raise ListingError(
+            422,
+            "amount_field_mismatch",
+            "Ad requests have a budget_uah; ad offerings have a price_uah.",
+            wrong_amount,
+        )
+    if "delivery_days" in sent and data.delivery_days is None and not is_request:
+        raise ListingError(
+            422, "delivery_required", "An ad offering needs a delivery time.", "delivery_days"
+        )
+    if "category" in sent and data.category != listing.category:
+        if await has_active_order(session, listing.id):
+            raise ListingError(
+                409,
+                "category_locked",
+                "The category cannot be changed while this listing has an active order.",
+                "category",
+            )
+        listing.category = data.category
+
+    for field in ("title", "description", "delivery_days"):
+        if field in sent:
+            setattr(listing, field, getattr(data, field))
+    amount = data.budget_uah if is_request else data.price_uah
+    if amount is not None:
+        listing.price = amount
+    if data.specs is not None:
+        listing.specs = [spec.model_dump() for spec in data.specs]
+    if "audience" in sent:
+        _set_audience(
+            listing, None if data.audience is None or data.audience.is_empty() else data.audience
+        )
     await session.commit()
     await session.refresh(listing)
     return listing

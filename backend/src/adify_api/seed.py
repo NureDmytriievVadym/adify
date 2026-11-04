@@ -1,4 +1,4 @@
-"""Development-only demo data: six accounts and twelve listings across both roles.
+"""Development-only demo data: six accounts, twelve listings, and one active order.
 
 Run inside the backend container while the development stack is up:
 
@@ -7,7 +7,10 @@ Run inside the backend container while the development stack is up:
 
 Re-running is safe: accounts are matched by email and listings by a deterministic
 UUID, so existing demo rows are left untouched. ``--reset`` removes only rows this
-script created (accounts with ``@demo.adify.app`` emails and their listings).
+script created (accounts with ``@demo.adify.app`` emails, their listings and orders).
+
+The active order on Digital Daily's banner offering demonstrates FR-017: its owner can
+edit every detail except the category.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from adify_api.accounts.models import Account, AccountBan, AccountRole
@@ -34,6 +37,7 @@ from adify_api.listings.models import (
     ListingCategory,
     ListingType,
 )
+from adify_api.orders.models import Order, OrderStatus
 from adify_api.verification.models import VerificationCode
 
 DEFAULT_PASSWORD = "AdifyDemo123"
@@ -63,14 +67,26 @@ class DemoListing:
     specs: tuple[tuple[str, str], ...] = ()
 
 
+@dataclass(frozen=True)
+class DemoOrder:
+    key: str
+    listing: str
+    customer: str
+    provider: str
+    status: OrderStatus
+
+
 @dataclass
 class SeedResult:
     accounts_created: int = 0
     accounts_existing: int = 0
     listings_created: int = 0
     listings_existing: int = 0
+    orders_created: int = 0
+    orders_existing: int = 0
     accounts_removed: int = 0
     listings_removed: int = 0
+    orders_removed: int = 0
     accounts: list[Account] = field(default_factory=list)
 
 
@@ -308,6 +324,18 @@ LISTINGS: tuple[DemoListing, ...] = (
 )
 
 
+# Locks the category of "banners-journal" so the FR-017 edit rule can be demonstrated.
+ORDERS: tuple[DemoOrder, ...] = (
+    DemoOrder(
+        "banners-journal-olena",
+        "banners-journal",
+        "olena",
+        "digital-daily",
+        OrderStatus.IN_PROGRESS,
+    ),
+)
+
+
 class SeedError(RuntimeError):
     """The database contains a conflicting row the script will not overwrite."""
 
@@ -320,6 +348,10 @@ def _listing_id(key: str) -> uuid.UUID:
     return uuid.uuid5(DEMO_NAMESPACE, f"listing:{key}")
 
 
+def _order_id(key: str) -> uuid.UUID:
+    return uuid.uuid5(DEMO_NAMESPACE, f"order:{key}")
+
+
 async def _demo_accounts(session: AsyncSession) -> list[Account]:
     emails = [account.email for account in ACCOUNTS]
     return list(await session.scalars(select(Account).where(Account.email.in_(emails))))
@@ -328,7 +360,7 @@ async def _demo_accounts(session: AsyncSession) -> list[Account]:
 async def reset_demo_data(
     sessionmaker: async_sessionmaker[AsyncSession],
 ) -> SeedResult:
-    """Remove only the demo accounts and their listings; other rows are untouched."""
+    """Remove only the demo accounts, their listings and orders; other rows are untouched."""
     result = SeedResult()
     async with sessionmaker() as session:
         accounts = await _demo_accounts(session)
@@ -339,6 +371,19 @@ async def reset_demo_data(
         listing_ids = list(
             await session.scalars(select(Listing.id).where(Listing.owner_id.in_(account_ids)))
         )
+        order_ids = list(
+            await session.scalars(
+                select(Order.id).where(
+                    or_(
+                        Order.listing_id.in_(listing_ids),
+                        Order.customer_id.in_(account_ids),
+                        Order.provider_id.in_(account_ids),
+                    )
+                )
+            )
+        )
+        if order_ids:
+            await session.execute(delete(Order).where(Order.id.in_(order_ids)))
         if listing_ids:
             await session.execute(
                 delete(ListingAttachment).where(ListingAttachment.listing_id.in_(listing_ids))
@@ -353,6 +398,7 @@ async def reset_demo_data(
         await session.commit()
         result.accounts_removed = len(accounts)
         result.listings_removed = len(listing_ids)
+        result.orders_removed = len(order_ids)
     return result
 
 
@@ -367,6 +413,7 @@ async def seed_demo_data(
         removed = await reset_demo_data(sessionmaker)
         result.accounts_removed = removed.accounts_removed
         result.listings_removed = removed.listings_removed
+        result.orders_removed = removed.orders_removed
 
     now = datetime.now(UTC)
     accounts: dict[str, Account] = {}
@@ -422,14 +469,31 @@ async def seed_demo_data(
             result.listings_created += 1
         await session.commit()
 
+        for spec in ORDERS:
+            order_id = _order_id(spec.key)
+            if await session.get(Order, order_id) is not None:
+                result.orders_existing += 1
+                continue
+            session.add(
+                Order(
+                    id=order_id,
+                    listing_id=_listing_id(spec.listing),
+                    customer_id=accounts[spec.customer].id,
+                    provider_id=accounts[spec.provider].id,
+                    status=spec.status,
+                )
+            )
+            result.orders_created += 1
+        await session.commit()
+
     return result
 
 
 def _print_summary(result: SeedResult, password: str) -> None:
-    if result.accounts_removed or result.listings_removed:
+    if result.accounts_removed or result.listings_removed or result.orders_removed:
         print(
-            f"Removed {result.accounts_removed} demo accounts "
-            f"and {result.listings_removed} demo listings."
+            f"Removed {result.accounts_removed} demo accounts, "
+            f"{result.listings_removed} demo listings, and {result.orders_removed} demo orders."
         )
     print(
         f"Accounts: {result.accounts_created} created, {result.accounts_existing} already present."
@@ -437,6 +501,7 @@ def _print_summary(result: SeedResult, password: str) -> None:
     print(
         f"Listings: {result.listings_created} created, {result.listings_existing} already present."
     )
+    print(f"Orders: {result.orders_created} created, {result.orders_existing} already present.")
     print(f"\nPassword for every demo account: {password}\n")
     print(f"{'ROLE':<9} {'EMAIL':<40} NAME")
     for account in result.accounts:
@@ -457,7 +522,7 @@ async def _run(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="python -m adify_api.seed",
-        description="Fill the development database with Adify demo accounts and listings.",
+        description="Fill the development database with Adify demo accounts, listings, and orders.",
     )
     parser.add_argument(
         "--reset",

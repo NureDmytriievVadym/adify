@@ -19,7 +19,10 @@
   <div class="page-intro">
     <span class="eyebrow">YOUR LISTINGS</span>
     <h1>My <span>listings.</span></h1>
-    <p>Everything you have published. Other users can open each one from the marketplace.</p>
+    <p>
+      Everything you have published. Other users can open each one from the marketplace; you can
+      edit the details at any time.
+    </p>
   </div>
 
   {#if !session.account && session.restored}
@@ -34,7 +37,7 @@
     <a class="button button-dark" href="/listings/new">Create a listing <Icon name="arrow" /></a>
   {:else}
     <div class="listing-grid marketplace-grid">
-      {#each result.items as listing (listing.id)}<LiveListingCard {listing} />{/each}
+      {#each result.items as listing (listing.id)}<LiveListingCard {listing} editable />{/each}
     </div>
   {/if}
 </div>
