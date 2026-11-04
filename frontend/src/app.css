@@ -5225,3 +5225,67 @@ body {
 .how-intro-layout > .page-intro {
   max-width: none;
 }
+
+/* FR-017: editing a listing */
+.card-edit {
+  display: inline-block;
+  margin-bottom: 17px;
+}
+
+.locked-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: #fff1ed;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.locked-hint svg {
+  margin-top: 2px;
+}
+
+.form-field select:disabled {
+  background: #eceae4;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.attachment-editor {
+  margin-top: 4px;
+}
+
+.attachment-editor .file-list li.removing span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+}
+
+.save-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* Sits between the title (28px bottom margin) and the artwork. */
+  margin: -12px 0 24px;
+  padding: 8px 12px;
+  border-radius: 3px;
+  background: var(--night);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 560px) {
+  .edit-actions .button {
+    width: 100%;
+  }
+}

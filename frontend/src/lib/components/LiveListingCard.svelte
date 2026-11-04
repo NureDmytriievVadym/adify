@@ -3,7 +3,7 @@
   import type { ApiListing } from '#lib/listings/api.ts';
   import Icon from './Icon.svelte';
   import ListingArtwork from './ListingArtwork.svelte';
-  let { listing }: { listing: ApiListing } = $props();
+  let { listing, editable = false }: { listing: ApiListing; editable?: boolean } = $props();
 
   const initials = $derived(
     listing.owner.display_name
@@ -37,5 +37,10 @@
         ></span
       ><span class="card-arrow"><Icon name="arrow" size={18} /></span>
     </div>
+    {#if editable}
+      <a class="text-link card-edit" href={`/listings/${listing.id}/edit`}
+        >Edit<span class="visually-hidden"> {listing.title}</span></a
+      >
+    {/if}
   </div>
 </article>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { PUBLIC_API_BASE_URL } from '$app/env/public';
+  import { page } from '$app/state';
   import type { PageData } from './$types';
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
@@ -183,6 +184,11 @@
               : 'Ad request'}</span
           >
           <h1>{view.title}</h1>
+          {#if !view.sample && page.state.listingSaved}
+            <p class="save-notice" role="status">
+              <Icon name="check" size={16} /> Your changes are saved.
+            </p>
+          {/if}
         </div>
         <ListingArtwork category={view.categoryId} large />
         <section class="detail-section">
@@ -256,7 +262,12 @@
             <Icon name="clock" size={18} /><span>Estimated delivery: {view.delivery}</span>
           </div>
           {#if !view.sample && session.account && view.ownerId === session.account.id}
-            <p class="small-note">This is your listing.</p>
+            <div class="preview-actions">
+              <a class="button button-dark" href={`/listings/${view.id}/edit`}
+                >Edit listing <Icon name="arrow" size={18} /></a
+              >
+            </div>
+            <p class="small-note">This is your listing. Changes appear here as soon as you save.</p>
           {:else}
             <div class="preview-actions" aria-describedby="contact-note">
               {#if view.sample}

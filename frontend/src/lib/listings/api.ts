@@ -61,10 +61,14 @@ export interface ApiListing {
   audience: ApiAudience | null;
   owner: { id: string; display_name: string; role: 'customer' | 'provider' };
   attachments: Attachment[];
+  /** Owner view only (FR-017): fields that cannot change right now, e.g. `category`. */
+  locked_fields?: ListingField[];
 }
 
 export type CreateResult =
-  { ok: true; listing: ApiListing } | { ok: false; fieldErrors: FieldErrors; message?: string };
+  | { ok: true; listing: ApiListing }
+  | { ok: false; fieldErrors: FieldErrors; message?: string; type?: string };
+export type SaveResult = CreateResult;
 
 export const MAX_SPECS = 10;
 export const MAX_ATTACHMENTS = 5;
@@ -145,6 +149,7 @@ const authorization = () => ({ Authorization: `Bearer ${session.accessToken}` })
 interface ApiError {
   loc: (string | number)[];
   msg: string;
+  type?: string;
 }
 
 async function errorsOf(response: Response): Promise<ApiError[]> {
@@ -184,24 +189,39 @@ const audienceOf = (input: ListingInput): ApiAudience | undefined => {
     : audience;
 };
 
-export async function createListing(type: ListingType, input: ListingInput): Promise<CreateResult> {
+/**
+ * The request body for a listing. A new listing omits empty optional fields; an edit
+ * sends them as `null` so the API clears a removed delivery time or audience (FR-017).
+ */
+function listingBody(type: ListingType, input: ListingInput, mode: 'create' | 'update') {
   const days = input.delivery_days.trim();
   const audience = audienceOf(input);
-  const body = {
+  const clear = mode === 'update' ? null : undefined;
+  const body: Record<string, unknown> = {
     category: input.category,
     title: input.title.trim(),
     description: input.description.trim(),
     [type === 'request' ? 'budget_uah' : 'price_uah']: input.price.trim().replace(',', '.'),
-    ...(days ? { delivery_days: Number(days) } : {}),
+    delivery_days: days ? Number(days) : clear,
     specs: input.specs
       .map((spec) => ({ label: spec.label.trim(), value: spec.value.trim() }))
       .filter((spec) => spec.label || spec.value),
-    ...(audience ? { audience } : {}),
+    audience: audience ?? clear,
   };
+  for (const key of Object.keys(body)) if (body[key] === undefined) delete body[key];
+  return body;
+}
+
+async function sendListing(
+  url: string,
+  method: 'POST' | 'PATCH',
+  body: Record<string, unknown>,
+  fallback: string,
+): Promise<SaveResult> {
   let response: Response;
   try {
-    response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/listings/${type}s`, {
-      method: 'POST',
+    response = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json', ...authorization() },
       body: JSON.stringify(body),
     });
@@ -212,14 +232,76 @@ export async function createListing(type: ListingType, input: ListingInput): Pro
 
   const fieldErrors: FieldErrors = {};
   let message: string | undefined;
+  let type: string | undefined;
   for (const error of await errorsOf(response)) {
+    type ??= error.type;
     const field = apiField[String(error.loc[1])];
     if (field) fieldErrors[field] ??= error.msg;
     else message ??= error.msg;
   }
-  if (!message && Object.keys(fieldErrors).length === 0)
-    message = 'The listing could not be created. Try again in a moment.';
-  return { ok: false, fieldErrors, message };
+  if (!message && Object.keys(fieldErrors).length === 0) message = fallback;
+  return { ok: false, fieldErrors, message, type };
+}
+
+export const createListing = (type: ListingType, input: ListingInput): Promise<CreateResult> =>
+  sendListing(
+    `${PUBLIC_API_BASE_URL}/api/v1/listings/${type}s`,
+    'POST',
+    listingBody(type, input, 'create'),
+    'The listing could not be created. Try again in a moment.',
+  );
+
+/** FR-017: the owner saves every field; an unchanged locked category is not a change. */
+export const updateListing = (
+  id: string,
+  type: ListingType,
+  input: ListingInput,
+): Promise<SaveResult> =>
+  sendListing(
+    `${PUBLIC_API_BASE_URL}/api/v1/listings/${id}`,
+    'PATCH',
+    listingBody(type, input, 'update'),
+    'Your changes could not be saved. Try again in a moment.',
+  );
+
+/** The edit form starts from the stored listing. */
+export function inputFromListing(listing: ApiListing): ListingInput {
+  const audience = listing.audience;
+  return {
+    category: listing.category,
+    title: listing.title,
+    description: listing.description,
+    price: listing.price_uah.replace(/\.00$/, ''),
+    delivery_days: listing.delivery_days === null ? '' : String(listing.delivery_days),
+    specs: listing.specs.length
+      ? listing.specs.map((spec) => ({ ...spec }))
+      : [{ label: '', value: '' }],
+    ageMin: audience?.age_min == null ? '' : String(audience.age_min),
+    ageMax: audience?.age_max == null ? '' : String(audience.age_max),
+    country: audience?.country ?? '',
+    socioeconomic: audience?.socioeconomic ?? '',
+    traits: audience?.traits.join(', ') ?? '',
+  };
+}
+
+export async function deleteAttachment(
+  listingId: string,
+  attachment: Attachment,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const response = await fetch(
+      `${PUBLIC_API_BASE_URL}/api/v1/listings/${listingId}/attachments/${attachment.id}`,
+      { method: 'DELETE', headers: authorization() },
+    );
+    if (response.ok || response.status === 404) return { ok: true };
+    const [error] = await errorsOf(response);
+    return {
+      ok: false,
+      message: `${attachment.filename}: ${error?.msg ?? 'the file could not be removed.'}`,
+    };
+  } catch {
+    return { ok: false, message: `${attachment.filename}: Adify is unreachable.` };
+  }
 }
 
 export async function uploadAttachment(
@@ -313,6 +395,31 @@ export async function fetchListing(id: string): Promise<FetchResult> {
   return { ok: false, notFound: false, message: 'The listing could not be loaded. Try again.' };
 }
 
+export type OwnListingResult =
+  | { ok: true; listing: ApiListing }
+  | { ok: false; reason: 'not_found' | 'not_owner' | 'error'; message: string };
+
+/** The owner's view of a listing with its locked fields (FR-017). */
+export async function fetchOwnListing(id: string): Promise<OwnListingResult> {
+  try {
+    const response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/listings/mine/${id}`, {
+      headers: authorization(),
+    });
+    if (response.ok) return { ok: true, listing: (await response.json()) as ApiListing };
+    if (response.status === 404)
+      return { ok: false, reason: 'not_found', message: 'This listing could not be found.' };
+    if (response.status === 403)
+      return {
+        ok: false,
+        reason: 'not_owner',
+        message: 'Only the owner of this listing can edit it.',
+      };
+  } catch {
+    // Falls through to the generic message below.
+  }
+  return { ok: false, reason: 'error', message: 'The listing could not be loaded. Try again.' };
+}
+
 export type ContactResult =
   { ok: true; phone?: string } | { ok: false; type: string; message: string };
 
@@ -337,7 +444,7 @@ async function contact(id: string, action: 'phone-reveal' | 'chats'): Promise<Co
       : { ok: true };
   }
   const [error] = await errorsOf(response);
-  const type = (error as (ApiError & { type?: string }) | undefined)?.type ?? 'unknown';
+  const type = error?.type ?? 'unknown';
   return { ok: false, type, message: error?.msg ?? 'This action is not available.' };
 }
 

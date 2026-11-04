@@ -466,7 +466,7 @@ test('my listings shows what the signed-in user published', async ({ page }) => 
   await mockApi(page, 'customer');
   await page.goto('/listings/mine');
 
-  await expect(page.getByRole('link', { name: 'My own request' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My own request', exact: true })).toBeVisible();
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag21a']).analyze();
   expect(results.violations).toEqual([]);
 });
