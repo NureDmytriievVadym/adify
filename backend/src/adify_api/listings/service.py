@@ -1,5 +1,6 @@
 import re
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import String, cast, exists, func, or_, select
@@ -12,6 +13,7 @@ from adify_api.listings.models import (
     Listing,
     ListingAttachment,
     ListingCategory,
+    ListingStatus,
     ListingType,
 )
 from adify_api.listings.schemas import (
@@ -148,6 +150,7 @@ async def list_listings(
     type_: ListingType | None = None,
     category: ListingCategory | None = None,
     owner_id: uuid.UUID | None = None,
+    open_only: bool = False,
     search: str | None = None,
     price_min: Decimal | None = None,
     price_max: Decimal | None = None,
@@ -164,8 +167,10 @@ async def list_listings(
     """Search and filter public listings (FR-016, FR-084–FR-086).
 
     ``search`` matches title, description, or category. ``owner_id`` narrows the
-    list to one account's own listings. Audience ranges overlap rather than require
-    exact equality: asking for ages 18–24 includes a listing targeting 18–34.
+    list to one account's own listings. ``open_only`` keeps only active listings: the
+    public marketplace hides paused and expired ones (FR-018, FR-019). Audience ranges
+    overlap rather than require exact equality: asking for ages 18–24 includes a listing
+    targeting 18–34.
     """
     filters = []
     if type_ is not None:
@@ -174,6 +179,9 @@ async def list_listings(
         filters.append(Listing.category == category)
     if owner_id is not None:
         filters.append(Listing.owner_id == owner_id)
+    if open_only:
+        filters.append(Listing.paused_at.is_(None))
+        filters.append(Listing.expires_at > datetime.now(UTC))
     if search and (term := search.strip()):
         pattern = _like_pattern(term)
         filters.append(
@@ -245,6 +253,45 @@ def ensure_can_chat(listing: Listing, account: Account) -> None:
         raise ListingError(403, "own_listing", "You cannot start a chat about your own listing.")
     if listing.owner.role == account.role:
         raise ListingError(403, "same_role_chat", "Chats connect one customer and one provider.")
+
+
+def ensure_accepts_orders(listing: Listing) -> None:
+    """FR-018/FR-019: only an active listing takes new orders.
+
+    Starting a chat is the first step to an order, so the chat endpoint checks this now;
+    order creation (including from an existing chat) must call it as well.
+    """
+    status = listing.status
+    if status == ListingStatus.PAUSED:
+        raise ListingError(
+            409, "listing_paused", "This listing is paused and is not accepting new orders."
+        )
+    if status == ListingStatus.EXPIRED:
+        raise ListingError(
+            409, "listing_expired", "This listing has expired and is not accepting new orders."
+        )
+
+
+async def pause_listing(session: AsyncSession, listing: Listing) -> Listing:
+    """FR-018: stop new orders. Existing orders continue; pausing twice is a no-op."""
+    if listing.status == ListingStatus.EXPIRED:
+        raise ListingError(409, "listing_expired", "This listing has already expired.")
+    if listing.paused_at is None:
+        listing.paused_at = datetime.now(UTC)
+        await session.commit()
+        await session.refresh(listing)
+    return listing
+
+
+async def resume_listing(session: AsyncSession, listing: Listing) -> Listing:
+    """FR-018/FR-019: take new orders again, unless the listing's lifetime has ended."""
+    if listing.status == ListingStatus.EXPIRED:
+        raise ListingError(409, "listing_expired", "An expired listing cannot be resumed.")
+    if listing.paused_at is not None:
+        listing.paused_at = None
+        await session.commit()
+        await session.refresh(listing)
+    return listing
 
 
 def ensure_owner(listing: Listing, account: Account) -> None:

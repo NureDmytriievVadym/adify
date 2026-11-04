@@ -1004,3 +1004,148 @@ async def test_owner_view_reports_the_locked_fields(
     assert error_type(stranger) == "not_listing_owner"
     assert guest.status_code == 401
     assert unknown.status_code == 404
+
+
+# FR-018, FR-019: pausing, resuming, and expiry
+
+
+async def expire(sessionmaker: async_sessionmaker[AsyncSession], listing_id: str, paused=True):
+    """Move a listing past the end of its lifetime, optionally paused before it expired."""
+    now = datetime.now(UTC)
+    async with sessionmaker() as session:
+        await session.execute(
+            update(Listing)
+            .where(Listing.id == uuid.UUID(listing_id))
+            .values(
+                expires_at=now - timedelta(days=1),
+                paused_at=now - timedelta(days=3) if paused else None,
+            )
+        )
+        await session.commit()
+
+
+async def public_ids(client: AsyncClient) -> list[str]:
+    return [item["id"] for item in (await client.get("/api/v1/listings")).json()["items"]]
+
+
+async def test_a_new_listing_is_active_for_the_configured_lifetime(
+    client: AsyncClient, provider, monkeypatch
+):
+    monkeypatch.setattr(get_settings(), "listing_lifetime_days", 7)
+
+    listing = await publish(client, provider, OFFER)
+
+    assert listing["status"] == "active"
+    lifetime = datetime.fromisoformat(listing["expires_at"]) - datetime.fromisoformat(
+        listing["created_at"]
+    )
+    assert timedelta(days=7) - timedelta(minutes=1) < lifetime < timedelta(days=7, minutes=1)
+
+
+async def test_owner_pauses_and_resumes_a_listing(client: AsyncClient, customer, provider):
+    listing = await publish(client, provider, OFFER)
+    chat = f"/api/v1/listings/{listing['id']}/chats"
+
+    paused = await client.post(f"/api/v1/listings/{listing['id']}/pause", headers=provider)
+
+    assert paused.status_code == 200
+    assert paused.json()["status"] == "paused"
+    assert paused.json()["locked_fields"] == []
+    public = (await client.get(f"/api/v1/listings/{listing['id']}")).json()
+    assert public["status"] == "paused"
+    assert listing["id"] not in await public_ids(client)
+    mine = (await client.get("/api/v1/listings/mine", headers=provider)).json()
+    assert [(item["id"], item["status"]) for item in mine["items"]] == [(listing["id"], "paused")]
+    blocked = await client.post(chat, headers=customer)
+    assert blocked.status_code == 409
+    assert error_type(blocked) == "listing_paused"
+    assert "not accepting new orders" in blocked.json()["detail"][0]["msg"]
+
+    resumed = await client.post(f"/api/v1/listings/{listing['id']}/resume", headers=provider)
+
+    assert resumed.status_code == 200
+    assert resumed.json()["status"] == "active"
+    assert listing["id"] in await public_ids(client)
+    # Every order check passes again; only the chat itself is still to come.
+    reopened = await client.post(chat, headers=customer)
+    assert reopened.status_code == 501
+    assert error_type(reopened) == "chat_not_available"
+
+
+async def test_pausing_and_resuming_twice_changes_nothing(client: AsyncClient, provider):
+    listing = await publish(client, provider, OFFER)
+    base = f"/api/v1/listings/{listing['id']}"
+
+    first = await client.post(f"{base}/pause", headers=provider)
+    second = await client.post(f"{base}/pause", headers=provider)
+    resumed = await client.post(f"{base}/resume", headers=provider)
+    again = await client.post(f"{base}/resume", headers=provider)
+
+    assert first.json() == second.json()
+    assert resumed.json()["status"] == again.json()["status"] == "active"
+
+
+async def test_a_paused_listing_can_still_be_edited(client: AsyncClient, provider):
+    listing = await publish(client, provider, OFFER)
+    await client.post(f"/api/v1/listings/{listing['id']}/pause", headers=provider)
+
+    response = await edit(client, listing["id"], provider, {"title": "Edited while paused"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "paused"
+
+
+@pytest.mark.parametrize("paused", [True, False])
+async def test_an_expired_listing_cannot_be_resumed_or_ordered(
+    client: AsyncClient, customer, provider, sessionmaker, paused
+):
+    listing = await publish(client, provider, OFFER)
+    await expire(sessionmaker, listing["id"], paused=paused)
+    base = f"/api/v1/listings/{listing['id']}"
+
+    resume = await client.post(f"{base}/resume", headers=provider)
+    pause = await client.post(f"{base}/pause", headers=provider)
+    chat = await client.post(f"{base}/chats", headers=customer)
+
+    assert resume.status_code == 409
+    assert error_type(resume) == "listing_expired"
+    assert resume.json()["detail"][0]["msg"] == "An expired listing cannot be resumed."
+    assert pause.status_code == 409
+    assert error_type(pause) == "listing_expired"
+    assert chat.status_code == 409
+    assert error_type(chat) == "listing_expired"
+    details = (await client.get(base)).json()
+    assert details["status"] == "expired"
+    assert listing["id"] not in await public_ids(client)
+
+
+async def test_only_the_owner_pauses_and_only_a_verified_owner_resumes(
+    client: AsyncClient, customer, provider, sessionmaker
+):
+    listing = await publish(client, provider, OFFER)
+    base = f"/api/v1/listings/{listing['id']}"
+
+    for action in ("pause", "resume"):
+        guest = await client.post(f"{base}/{action}")
+        stranger = await client.post(f"{base}/{action}", headers=customer)
+        unknown = await client.post(f"/api/v1/listings/{uuid.uuid4()}/{action}", headers=provider)
+        assert guest.status_code == 401
+        assert stranger.status_code == 403
+        assert error_type(stranger) == "not_listing_owner"
+        assert unknown.status_code == 404
+
+    async with sessionmaker() as session:
+        await session.execute(
+            update(Account)
+            .where(Account.email == "provider@example.com")
+            .values(email_verified=False)
+        )
+        await session.commit()
+    # Withdrawing a listing is always possible; putting it back needs verified contacts.
+    paused = await client.post(f"{base}/pause", headers=provider)
+    resumed = await client.post(f"{base}/resume", headers=provider)
+
+    assert paused.status_code == 200
+    assert paused.json()["status"] == "paused"
+    assert resumed.status_code == 403
+    assert error_type(resumed) == "verification_required"

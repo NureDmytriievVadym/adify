@@ -12,7 +12,7 @@ from adify_api.auth.dependencies import CurrentAccount, VerifiedAccount
 from adify_api.core.config import get_settings
 from adify_api.core.db import get_session
 from adify_api.listings import service, storage
-from adify_api.listings.models import ListingCategory, ListingType
+from adify_api.listings.models import Listing, ListingCategory, ListingType
 from adify_api.listings.schemas import (
     AttachmentResponse,
     ListingPage,
@@ -41,6 +41,12 @@ def _http_error(error: ListingError) -> HTTPException:
     loc = ["body", error.field] if error.field else ["body"]
     detail = [{"loc": loc, "msg": error.msg, "type": error.type}]
     return HTTPException(status_code=error.status_code, detail=detail)
+
+
+async def _own_view(session: AsyncSession, listing: Listing) -> OwnListingResponse:
+    return OwnListingResponse.from_model(
+        listing, locked_fields=await service.locked_fields(session, listing)
+    )
 
 
 def _require_role(account: VerifiedAccount, role: AccountRole, msg: str) -> None:
@@ -103,7 +109,9 @@ async def list_listings(
     traits: Annotated[list[str] | None, Query()] = None,
     sort: ListingSort = ListingSort.NEWEST,
 ) -> ListingPage:
-    """Public listings with search and filters (FR-015, FR-016, FR-084–FR-086).
+    """Active public listings with search and filters (FR-015, FR-016, FR-084–FR-086).
+
+    Paused and expired listings are left out (FR-018, FR-019); they stay reachable by id.
 
     ``q`` matches title, description, or category without regard to case. Price
     bounds apply to the price or budget in UAH. ``delivery_max`` is the maximum
@@ -135,6 +143,7 @@ async def list_listings(
         session,
         type_=type,
         category=category,
+        open_only=True,
         search=q,
         price_min=price_min,
         price_max=price_max,
@@ -153,7 +162,7 @@ async def list_listings(
 
 @router.get("/mine", response_model=ListingPage, responses=ERRORS)
 async def my_listings(account: CurrentAccount, session: SessionDep, page: PageDep) -> ListingPage:
-    """The signed-in account's own listings, newest first."""
+    """The signed-in account's own listings, newest first, including paused and expired ones."""
     limit, offset = page
     listings, total = await service.list_listings(
         session, owner_id=account.id, limit=limit, offset=offset
@@ -171,9 +180,7 @@ async def my_listing(
         service.ensure_owner(listing, account)
     except ListingError as error:
         raise _http_error(error) from None
-    return OwnListingResponse.from_model(
-        listing, locked_fields=await service.locked_fields(session, listing)
-    )
+    return await _own_view(session, listing)
 
 
 @router.patch(
@@ -201,9 +208,48 @@ async def update_listing(
         listing = await service.update_listing(session, listing, data)
     except ListingError as error:
         raise _http_error(error) from None
-    return OwnListingResponse.from_model(
-        listing, locked_fields=await service.locked_fields(session, listing)
-    )
+    return await _own_view(session, listing)
+
+
+STATE_ERRORS = ERRORS | {
+    status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "The listing has expired"}
+}
+
+
+@router.post("/{listing_id}/pause", response_model=OwnListingResponse, responses=STATE_ERRORS)
+async def pause_listing(
+    listing_id: uuid.UUID, account: CurrentAccount, session: SessionDep
+) -> OwnListingResponse:
+    """Pause your listing (FR-018): it leaves the marketplace and takes no new orders.
+
+    Existing orders continue. Pausing a paused listing changes nothing. Any signed-in
+    owner may pause, so a listing can always be withdrawn.
+    """
+    try:
+        listing = await service.get_listing(session, listing_id)
+        service.ensure_owner(listing, account)
+        listing = await service.pause_listing(session, listing)
+    except ListingError as error:
+        raise _http_error(error) from None
+    return await _own_view(session, listing)
+
+
+@router.post("/{listing_id}/resume", response_model=OwnListingResponse, responses=STATE_ERRORS)
+async def resume_listing(
+    listing_id: uuid.UUID, account: VerifiedAccount, session: SessionDep
+) -> OwnListingResponse:
+    """Resume your paused listing (FR-018) so it takes new orders again.
+
+    An expired listing cannot be resumed (`409 listing_expired`, FR-019). Like
+    publishing, resuming needs a verified email address and phone number.
+    """
+    try:
+        listing = await service.get_listing(session, listing_id)
+        service.ensure_owner(listing, account)
+        listing = await service.resume_listing(session, listing)
+    except ListingError as error:
+        raise _http_error(error) from None
+    return await _own_view(session, listing)
 
 
 @router.get("/{listing_id}", response_model=ListingResponse, responses=ERRORS)
@@ -235,13 +281,23 @@ async def reveal_phone(
     "/{listing_id}/chats",
     status_code=status.HTTP_201_CREATED,
     responses=ERRORS
-    | {status.HTTP_501_NOT_IMPLEMENTED: {"model": ErrorResponse, "description": "Not yet"}},
+    | {
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The listing is paused or expired",
+        },
+        status.HTTP_501_NOT_IMPLEMENTED: {"model": ErrorResponse, "description": "Not yet"},
+    },
 )
 async def start_chat(listing_id: uuid.UUID, account: VerifiedAccount, session: SessionDep) -> None:
-    """FR-026 checks for starting a chat; the chat itself arrives with the chat story."""
+    """FR-026 checks for starting a chat; the chat itself arrives with the chat story.
+
+    A chat leads to an order, so a paused or expired listing refuses new ones (FR-018).
+    """
     try:
         listing = await service.get_listing(session, listing_id)
         service.ensure_can_chat(listing, account)
+        service.ensure_accepts_orders(listing)
     except ListingError as error:
         raise _http_error(error) from None
     raise _http_error(
