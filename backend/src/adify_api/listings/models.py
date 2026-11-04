@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 
@@ -7,6 +7,7 @@ from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from adify_api.accounts.models import Account, _enum
+from adify_api.core.config import get_settings
 from adify_api.core.db import Base
 
 
@@ -24,6 +25,18 @@ class ListingCategory(StrEnum):
     VIDEO_INTEGRATIONS = "video-integrations"
     STREAM_ADS = "stream-ads"
     IN_APP_MOBILE_ADS = "in-app-mobile-ads"
+
+
+class ListingStatus(StrEnum):
+    """FR-018/FR-019: derived from ``paused_at`` and ``expires_at``. Expiry wins over a pause."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    EXPIRED = "expired"
+
+
+def default_expiry() -> datetime:
+    return datetime.now(UTC) + timedelta(days=get_settings().listing_lifetime_days)
 
 
 class Listing(Base):
@@ -47,11 +60,26 @@ class Listing(Base):
     audience_socioeconomic: Mapped[str | None] = mapped_column(String(100))
     audience_traits: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # FR-018: set while the owner has paused the listing; FR-019: the end of its lifetime.
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=default_expiry, index=True
+    )
 
     owner: Mapped[Account] = relationship(lazy="selectin")
     attachments: Mapped[list["ListingAttachment"]] = relationship(
         lazy="selectin", order_by="ListingAttachment.created_at", cascade="all, delete-orphan"
     )
+
+    @property
+    def status(self) -> ListingStatus:
+        # SQLite returns naive datetimes; every stored time is UTC.
+        expires = self.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=UTC)
+        if expires <= datetime.now(UTC):
+            return ListingStatus.EXPIRED
+        return ListingStatus.PAUSED if self.paused_at is not None else ListingStatus.ACTIVE
 
 
 class ListingAttachment(Base):

@@ -39,7 +39,7 @@ format:
 e2e *args:
     docker compose run --rm --build e2e npm run test:e2e --workspace @adify/web -- {{args}}
 
-# Demo data: 3 customers, 3 providers, 12 listings across all categories, and 1 active order.
+# Demo data: 3 customers, 3 providers, 13 listings (1 expired) across all categories, 1 order.
 # Safe to re-run; `just seed --reset` recreates the demo rows.
 seed *args:
     docker compose exec -T -e ADIFY_ALLOW_SEED=true backend python -m adify_api.seed {{args}}

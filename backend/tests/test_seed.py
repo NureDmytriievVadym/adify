@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from adify_api.accounts.models import Account, AccountRole
 from adify_api.core.security import verify_password
-from adify_api.listings.models import Listing
+from adify_api.listings.models import Listing, ListingStatus
 from adify_api.listings.service import locked_fields
 from adify_api.orders.models import Order, OrderStatus
 from adify_api.seed import (
@@ -34,8 +34,8 @@ async def test_creates_demo_accounts_and_listings(sessionmaker):
     result = await seed_demo_data(sessionmaker)
 
     assert result.accounts_created == len(ACCOUNTS) == 6
-    assert result.listings_created == len(LISTINGS) == 12
-    assert await counts(sessionmaker) == (6, 12)
+    assert result.listings_created == len(LISTINGS) == 13
+    assert await counts(sessionmaker) == (6, 13)
 
     async with sessionmaker() as session:
         customers = await session.scalars(
@@ -72,8 +72,8 @@ async def test_seeding_twice_is_idempotent(sessionmaker):
     assert second.accounts_created == 0
     assert second.listings_created == 0
     assert second.accounts_existing == 6
-    assert second.listings_existing == 12
-    assert await counts(sessionmaker) == (6, 12)
+    assert second.listings_existing == 13
+    assert await counts(sessionmaker) == (6, 13)
 
 
 async def test_reset_recreates_only_demo_rows(sessionmaker):
@@ -94,10 +94,10 @@ async def test_reset_recreates_only_demo_rows(sessionmaker):
     result = await seed_demo_data(sessionmaker, reset=True)
 
     assert result.accounts_removed == 6
-    assert result.listings_removed == 12
+    assert result.listings_removed == 13
     assert result.accounts_created == 6
-    assert result.listings_created == 12
-    assert await counts(sessionmaker) == (7, 12)
+    assert result.listings_created == 13
+    assert await counts(sessionmaker) == (7, 13)
     async with sessionmaker() as session:
         assert await session.scalar(select(Account).where(Account.email == "real@example.com"))
 
@@ -149,3 +149,17 @@ async def test_reset_removes_demo_orders_before_their_listings(sessionmaker):
     assert removed.orders_removed == 1
     async with sessionmaker() as session:
         assert await session.scalar(select(func.count()).select_from(Order)) == 0
+
+
+async def test_one_demo_listing_is_expired_and_the_rest_are_active(sessionmaker):
+    await seed_demo_data(sessionmaker)
+
+    async with sessionmaker() as session:
+        listings = list(await session.scalars(select(Listing)))
+    statuses = {listing.id: listing.status for listing in listings}
+
+    assert statuses.pop(_listing_id("articles-newsletter")) == ListingStatus.EXPIRED
+    assert set(statuses.values()) == {ListingStatus.ACTIVE}
+    expired = next(item for item in listings if item.id == _listing_id("articles-newsletter"))
+    assert expired.owner_id == _account_id("digital-daily")
+    assert expired.paused_at is not None

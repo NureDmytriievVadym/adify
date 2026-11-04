@@ -193,6 +193,8 @@ type MockListing = {
   specs: { label: string; value: string }[];
   audience: Record<string, unknown> | null;
   owner: { id: string; display_name: string; role: string };
+  status: 'active' | 'paused' | 'expired';
+  expires_at: string;
   attachments: {
     id: string;
     filename: string;
@@ -213,6 +215,8 @@ const listing = (type: 'request' | 'offer', body: Record<string, unknown>): Mock
   specs: [{ label: 'Dimensions', value: '728 × 90 px' }],
   audience: null as null | Record<string, unknown>,
   owner: { id: '1', display_name: 'Olena Koval', role: 'provider' },
+  status: 'active',
+  expires_at: '2026-12-01T10:00:00Z',
   attachments: [
     {
       id: 'a1',

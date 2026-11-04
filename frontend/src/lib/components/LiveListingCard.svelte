@@ -21,9 +21,15 @@
   >
   <div class="card-content">
     <div class="card-category">
-      <span>{categoryName(listing.category)}</span><span
-        class:request={listing.type === 'request'}
-        class="type-badge">{listing.type === 'offer' ? 'Offer' : 'Ad request'}</span
+      <span>{categoryName(listing.category)}</span>
+      <span class="card-badges"
+        >{#if listing.status === 'paused' || listing.status === 'expired'}<span
+            class="listing-state"
+            class:expired={listing.status === 'expired'}
+            >{listing.status === 'paused' ? 'Paused' : 'Expired'}</span
+          >{/if}<span class:request={listing.type === 'request'} class="type-badge"
+          >{listing.type === 'offer' ? 'Offer' : 'Ad request'}</span
+        ></span
       >
     </div>
     <h3><a href={`/listings/${listing.id}`}>{listing.title}</a></h3>

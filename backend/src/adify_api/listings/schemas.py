@@ -15,7 +15,13 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from adify_api.accounts.models import AccountRole
-from adify_api.listings.models import Listing, ListingAttachment, ListingCategory, ListingType
+from adify_api.listings.models import (
+    Listing,
+    ListingAttachment,
+    ListingCategory,
+    ListingStatus,
+    ListingType,
+)
 
 Amount = Annotated[Decimal, Field(gt=0, le=Decimal("99999999.99"), decimal_places=2)]
 DeliveryDays = Annotated[int, Field(ge=1, le=365)]
@@ -168,6 +174,9 @@ class ListingResponse(BaseModel):
     owner: OwnerResponse
     attachments: list[AttachmentResponse]
     created_at: datetime
+    # FR-018/FR-019: only an active listing takes new orders.
+    status: ListingStatus
+    expires_at: datetime
 
     @classmethod
     def from_model(cls, listing: Listing, **extra: Any) -> Self:
@@ -188,6 +197,8 @@ class ListingResponse(BaseModel):
             ),
             attachments=[AttachmentResponse.from_model(item) for item in listing.attachments],
             created_at=listing.created_at,
+            status=listing.status,
+            expires_at=listing.expires_at,
             **extra,
         )
 

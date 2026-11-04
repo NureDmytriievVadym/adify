@@ -5,7 +5,10 @@
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
     fetchListing,
+    formatDate,
     formatDelivery,
+    pauseListing,
+    resumeListing,
     revealPhone,
     startChat,
     type ContactResult,
@@ -13,6 +16,7 @@
     type ApiAudience,
     type Attachment,
     type FetchResult,
+    type ListingStatus,
     type ListingType,
     type Spec,
   } from '#lib/listings/api.ts';
@@ -38,6 +42,8 @@
     placement: Spec[];
     audience: ApiAudience | null;
     attachments: Attachment[];
+    status: ListingStatus;
+    expiresAt: string | null;
   }
 
   let live: FetchResult | null = $state(null);
@@ -77,6 +83,8 @@
         placement,
         audience: null,
         attachments: [],
+        status: 'active',
+        expiresAt: null,
       };
     }
     if (!live?.ok) return null;
@@ -96,6 +104,8 @@
       placement: listing.specs,
       audience: listing.audience,
       attachments: listing.attachments,
+      status: listing.status,
+      expiresAt: listing.expires_at,
     };
   });
 
@@ -103,12 +113,37 @@
   let contactResult: (ContactResult & { ok: false }) | { ok: true; message: string } | null =
     $state(null);
   let contacting = $state(false);
+  let changing = $state(false);
+  let stateError: string | null = $state(null);
 
   $effect(() => {
     void data.listingId;
     phone = null;
     contactResult = null;
+    stateError = null;
   });
+
+  // FR-018/FR-019: only an active listing takes new orders, and chats lead to orders.
+  const closed = $derived(view?.status === 'paused' || view?.status === 'expired');
+  const until = $derived(view?.expiresAt ? formatDate(view.expiresAt) : '');
+
+  async function toggleState() {
+    if (!view?.id) return;
+    changing = true;
+    stateError = null;
+    const result =
+      view.status === 'paused' ? await resumeListing(view.id) : await pauseListing(view.id);
+    if (result.ok) live = { ok: true, listing: result.listing };
+    else {
+      stateError = result.message;
+      // The listing expired while the page was open: show its current state.
+      if (result.type === 'listing_expired') {
+        const fresh = await fetchListing(view.id);
+        if (fresh.ok) live = fresh;
+      }
+    }
+    changing = false;
+  }
 
   async function reveal() {
     if (!view?.id) return;
@@ -183,6 +218,11 @@
               ? 'Advertising offer'
               : 'Ad request'}</span
           >
+          {#if closed}
+            <span class="listing-state" class:expired={view.status === 'expired'}
+              >{view.status === 'paused' ? 'Paused' : 'Expired'}</span
+            >
+          {/if}
           <h1>{view.title}</h1>
           {#if !view.sample && page.state.listingSaved}
             <p class="save-notice" role="status">
@@ -266,22 +306,38 @@
               <a class="button button-dark" href={`/listings/${view.id}/edit`}
                 >Edit listing <Icon name="arrow" size={18} /></a
               >
+              <button
+                class="button button-outline"
+                type="button"
+                disabled={changing || view.status === 'expired'}
+                aria-describedby="listing-state-note"
+                onclick={toggleState}
+                >{view.status === 'active' ? 'Pause listing' : 'Resume listing'}</button
+              >
             </div>
+            {#if stateError}<p class="field-error" role="alert">{stateError}</p>{/if}
+            <p id="listing-state-note" class="small-note listing-state-note" aria-live="polite">
+              {view.status === 'active'
+                ? `Active until ${until}. Pausing hides it from the marketplace and stops new orders; existing orders continue.`
+                : view.status === 'paused'
+                  ? `Paused: hidden from the marketplace and not accepting new orders. You can resume it until ${until}.`
+                  : `Expired on ${until}. An expired listing cannot be resumed.`}
+            </p>
             <p class="small-note">This is your listing. Changes appear here as soon as you save.</p>
           {:else}
             <div class="preview-actions" aria-describedby="contact-note">
-              {#if view.sample}
-                <button class="button button-dark" type="button" disabled
+              {#if view.sample || closed}
+                <button
+                  class="button button-dark"
+                  type="button"
+                  disabled
+                  aria-describedby={closed ? 'closed-note' : undefined}
                   >Start chat <Icon name="social" size={18} /></button
-                >
-                <button class="button button-outline" type="button" disabled
-                  >Reveal phone number</button
                 >
               {:else if !session.account}
                 <a class="button button-dark" href="/sign-in"
                   >Start chat <Icon name="social" size={18} /></a
                 >
-                <a class="button button-outline" href="/sign-in">Reveal phone number</a>
               {:else}
                 <button
                   class="button button-dark"
@@ -289,18 +345,31 @@
                   disabled={contacting}
                   onclick={chat}>Start chat <Icon name="social" size={18} /></button
                 >
-                {#if phone}
-                  <a class="button button-outline revealed-phone" href={`tel:${phone}`}>{phone}</a>
-                {:else}
-                  <button
-                    class="button button-outline"
-                    type="button"
-                    disabled={contacting}
-                    onclick={reveal}>Reveal phone number</button
-                  >
-                {/if}
+              {/if}
+              {#if view.sample}
+                <button class="button button-outline" type="button" disabled
+                  >Reveal phone number</button
+                >
+              {:else if !session.account}
+                <a class="button button-outline" href="/sign-in">Reveal phone number</a>
+              {:else if phone}
+                <a class="button button-outline revealed-phone" href={`tel:${phone}`}>{phone}</a>
+              {:else}
+                <button
+                  class="button button-outline"
+                  type="button"
+                  disabled={contacting}
+                  onclick={reveal}>Reveal phone number</button
+                >
               {/if}
             </div>
+            {#if closed}
+              <p id="closed-note" class="listing-state-note closed-note">
+                {view.status === 'paused'
+                  ? 'This listing is paused and is not accepting new orders.'
+                  : 'This listing has expired and is not accepting new orders.'}
+              </p>
+            {/if}
             {#if contactResult}
               <p class={contactResult.ok ? 'small-note' : 'field-error'} role="alert">
                 {contactResult.message}

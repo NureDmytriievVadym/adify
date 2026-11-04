@@ -5289,3 +5289,44 @@ body {
     width: 100%;
   }
 }
+
+/* FR-018/FR-019: paused and expired listings */
+.card-badges {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.listing-state {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: var(--night);
+  color: var(--paper);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.listing-state.expired {
+  background: #e4e1da;
+  color: #4c4b47;
+}
+
+/* Sits on the eyebrow line, next to the category and listing type. */
+.detail-title .listing-state {
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.closed-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: #fff1ed;
+  font-size: 13px;
+  line-height: 1.5;
+}

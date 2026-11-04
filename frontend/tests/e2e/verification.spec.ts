@@ -18,6 +18,8 @@ const offer = {
   owner: { id: '2', display_name: 'Digital Daily', role: 'provider' },
   attachments: [],
   created_at: '2026-10-30T12:00:00Z',
+  status: 'active',
+  expires_at: '2026-11-29T12:00:00Z',
 };
 
 // The preview runs without the API; this mock keeps the account's verification state.

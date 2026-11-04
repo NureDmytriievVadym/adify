@@ -1,4 +1,4 @@
-"""Development-only demo data: six accounts, twelve listings, and one active order.
+"""Development-only demo data: six accounts, thirteen listings, and one active order.
 
 Run inside the backend container while the development stack is up:
 
@@ -10,7 +10,8 @@ UUID, so existing demo rows are left untouched. ``--reset`` removes only rows th
 script created (accounts with ``@demo.adify.app`` emails, their listings and orders).
 
 The active order on Digital Daily's banner offering demonstrates FR-017: its owner can
-edit every detail except the category.
+edit every detail except the category. Digital Daily's newsletter offering was paused
+and then expired, so it demonstrates that an expired listing cannot be resumed (FR-019).
 """
 
 from __future__ import annotations
@@ -65,6 +66,8 @@ class DemoListing:
     price: str
     delivery_days: int | None = None
     specs: tuple[tuple[str, str], ...] = ()
+    # Published one lifetime plus ten days ago and paused shortly before it expired.
+    expired: bool = False
 
 
 @dataclass(frozen=True)
@@ -309,6 +312,20 @@ LISTINGS: tuple[DemoListing, ...] = (
         ),
     ),
     DemoListing(
+        "articles-newsletter",
+        "digital-daily",
+        ListingType.OFFER,
+        ListingCategory.SPONSORED_ARTICLES,
+        "A sponsored story in our weekly design newsletter",
+        "A sponsored story in the Digital Daily newsletter, sent every Friday to readers "
+        "who work in design and product. This summer campaign slot has ended; the listing "
+        "is kept to show how an expired listing looks.",
+        "1900.00",
+        7,
+        (("Length", "Up to 600 words"), ("Images", "One JPG or PNG, 1200 × 630 px")),
+        expired=True,
+    ),
+    DemoListing(
         "app-fitness",
         "tetiana",
         ListingType.REQUEST,
@@ -416,6 +433,7 @@ async def seed_demo_data(
         result.orders_removed = removed.orders_removed
 
     now = datetime.now(UTC)
+    lifetime = timedelta(days=get_settings().listing_lifetime_days)
     accounts: dict[str, Account] = {}
 
     async with sessionmaker() as session:
@@ -452,6 +470,11 @@ async def seed_demo_data(
             if await session.get(Listing, listing_id) is not None:
                 result.listings_existing += 1
                 continue
+            created_at = now - timedelta(hours=index * 3)
+            paused_at = None
+            if spec.expired:
+                created_at = now - lifetime - timedelta(days=10)
+                paused_at = created_at + lifetime - timedelta(days=3)
             session.add(
                 Listing(
                     id=listing_id,
@@ -463,7 +486,9 @@ async def seed_demo_data(
                     price=Decimal(spec.price),
                     delivery_days=spec.delivery_days,
                     specs=[{"label": label, "value": value} for label, value in spec.specs],
-                    created_at=now - timedelta(hours=index * 3),
+                    created_at=created_at,
+                    paused_at=paused_at,
+                    expires_at=created_at + lifetime,
                 )
             )
             result.listings_created += 1
