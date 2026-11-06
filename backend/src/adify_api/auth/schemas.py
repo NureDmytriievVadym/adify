@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
-from adify_api.accounts.schemas import AccountResponse
+from adify_api.accounts.schemas import AccountResponse, Password
 
 # The web keeps the refresh token in an HttpOnly cookie; the Android client stores it itself.
 TokenDelivery = Literal["cookie", "body"]
@@ -34,3 +34,21 @@ class TokenResponse(BaseModel):
     expires_in: int
     refresh_token: str | None = None
     account: AccountResponse
+
+
+class PasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
+class PasswordResetConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str
+    password: Password

@@ -1,18 +1,36 @@
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, Response, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import Account
 from adify_api.accounts.schemas import AccountResponse, ErrorResponse, FieldError
-from adify_api.auth.schemas import RefreshRequest, SignInRequest, TokenDelivery, TokenResponse
-from adify_api.auth.service import AuthError, rotate_refresh_token, sign_in, sign_out
+from adify_api.auth.schemas import (
+    PasswordResetConfirmation,
+    PasswordResetRequest,
+    RefreshRequest,
+    SignInRequest,
+    TokenDelivery,
+    TokenResponse,
+)
+from adify_api.auth.service import (
+    AuthError,
+    deliver_password_reset,
+    request_password_reset,
+    reset_password,
+    rotate_refresh_token,
+    sign_in,
+    sign_out,
+)
 from adify_api.core.config import get_settings
 from adify_api.core.db import get_session
+from adify_api.core.mail import DeliveryError
 from adify_api.core.security import create_access_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 
 REFRESH_COOKIE = "adify_refresh"
 REFRESH_COOKIE_PATH = "/api/v1/auth"
@@ -21,6 +39,7 @@ ERROR_STATUS = {
     "invalid_refresh_token": status.HTTP_401_UNAUTHORIZED,
     "account_suspended": status.HTTP_403_FORBIDDEN,
     "account_banned": status.HTTP_403_FORBIDDEN,
+    "reset_link_invalid": status.HTTP_400_BAD_REQUEST,
 }
 ERROR_RESPONSES = {
     status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Not authenticated"},
@@ -92,3 +111,43 @@ async def sign_out_session(
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH)
     return response
+
+
+@router.post("/password-reset", status_code=status.HTTP_202_ACCEPTED)
+async def request_reset_link(
+    data: PasswordResetRequest, session: SessionDep, background: BackgroundTasks
+) -> Response:
+    """FR-081: email a single-use reset link to a verified address.
+
+    Always 202, sent or not, so the answer never reveals whether an email is registered.
+    """
+    if issued := await request_password_reset(session, data.email):
+        background.add_task(_deliver_reset_link, *issued)
+    return Response(status_code=status.HTTP_202_ACCEPTED)
+
+
+async def _deliver_reset_link(account: Account, token: str) -> None:
+    # Delivered after the response, so a slow or failing SMTP server cannot be timed.
+    try:
+        await deliver_password_reset(account, token)
+    except DeliveryError:
+        logger.exception("Could not email the password reset link to account %s", account.id)
+
+
+@router.post(
+    "/password-reset/confirm",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ErrorResponse,
+            "description": "Link expired, already used, or unknown",
+        }
+    },
+)
+async def confirm_reset(data: PasswordResetConfirmation, session: SessionDep) -> Response:
+    """Set a new password; the link stops working and every session is signed out."""
+    try:
+        await reset_password(session, data.token, data.password)
+    except AuthError as error:
+        return _error(error)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

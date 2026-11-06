@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -18,6 +19,26 @@ UKRAINIAN_PHONE = re.compile(r"\+380\d{9}")
 PHONE_SEPARATORS = re.compile(r"[\s()-]")
 
 
+def _password_policy(value: str) -> str:
+    if (
+        len(value) < 8
+        or not any(char.isalpha() for char in value)
+        or not any(char.isdecimal() for char in value)
+    ):
+        raise PydanticCustomError(
+            "password_policy",
+            "Use at least 8 characters, including at least one letter and one digit.",
+        )
+    # bcrypt only accepts the first 72 bytes of a password.
+    if len(value.encode()) > 72:
+        raise PydanticCustomError("password_too_long", "Use at most 72 bytes.")
+    return value
+
+
+# FR-080: shared by registration and password reset.
+Password = Annotated[str, AfterValidator(_password_policy)]
+
+
 class RegistrationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -27,7 +48,7 @@ class RegistrationRequest(BaseModel):
     email: EmailStr
     phone: str
     role: Literal["customer", "provider"]
-    password: str
+    password: Password
 
     @field_validator("email")
     @classmethod
@@ -52,23 +73,6 @@ class RegistrationRequest(BaseModel):
             raise PydanticCustomError(
                 "role_not_single", "Choose exactly one role: customer or provider."
             )
-        return value
-
-    @field_validator("password")
-    @classmethod
-    def password_policy(cls, value: str) -> str:
-        if (
-            len(value) < 8
-            or not any(char.isalpha() for char in value)
-            or not any(char.isdecimal() for char in value)
-        ):
-            raise PydanticCustomError(
-                "password_policy",
-                "Use at least 8 characters, including at least one letter and one digit.",
-            )
-        # bcrypt only accepts the first 72 bytes of a password.
-        if len(value.encode()) > 72:
-            raise PydanticCustomError("password_too_long", "Use at most 72 bytes.")
         return value
 
 
