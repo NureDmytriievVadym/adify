@@ -94,7 +94,8 @@ Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md)
 [story #4](docs/story-04.md), [story #7](docs/story-07.md),
 [story #11](docs/story-11.md), [story #5](docs/story-05.md),
 [listings ADY-008–010](docs/story-08-10.md),
-[editing listings](docs/story-edit-listing.md), and
+[editing listings](docs/story-edit-listing.md),
+[password reset](docs/story-password-reset.md), and
 [pausing and resuming listings](docs/story-pause-resume-listing.md). The source
 documents are supplied alongside this repository and are not modified here.
 
