@@ -64,6 +64,7 @@
         autocomplete="current-password"
         bind:value={password}
       />
+      <p class="form-footnote"><a href="/forgot-password">Forgot password?</a></p>
     </div>
 
     <button class="button button-dark register-submit" type="submit" disabled={submitting}>
