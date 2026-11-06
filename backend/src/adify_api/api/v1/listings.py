@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adify_api.accounts.models import AccountRole
 from adify_api.accounts.schemas import ErrorResponse
 from adify_api.auth.dependencies import CurrentAccount, VerifiedAccount
+from adify_api.chats import service as chats_service
+from adify_api.chats.schemas import ChatResponse
 from adify_api.core.config import get_settings
 from adify_api.core.db import get_session
 from adify_api.listings import service, storage
@@ -280,31 +282,27 @@ async def reveal_phone(
 @router.post(
     "/{listing_id}/chats",
     status_code=status.HTTP_201_CREATED,
+    response_model=ChatResponse,
     responses=ERRORS
-    | {
-        status.HTTP_409_CONFLICT: {
-            "model": ErrorResponse,
-            "description": "The listing is paused or expired",
-        },
-        status.HTTP_501_NOT_IMPLEMENTED: {"model": ErrorResponse, "description": "Not yet"},
-    },
+    | {status.HTTP_200_OK: {"model": ChatResponse, "description": "Existing chat"}},
 )
-async def start_chat(listing_id: uuid.UUID, account: VerifiedAccount, session: SessionDep) -> None:
-    """FR-026 checks for starting a chat; the chat itself arrives with the chat story.
+async def start_chat(
+    listing_id: uuid.UUID, account: VerifiedAccount, session: SessionDep, response: Response
+) -> ChatResponse:
+    """FR-026: start a chat with the owner of an active, paused, or expired listing.
 
-    A chat leads to an order, so a paused or expired listing refuses new ones (FR-018).
+    Pausing or expiry stops new orders, not conversations; order creation checks that.
+    Starting the same chat again returns it with `200`.
     """
     try:
         listing = await service.get_listing(session, listing_id)
         service.ensure_can_chat(listing, account)
-        service.ensure_accepts_orders(listing)
     except ListingError as error:
         raise _http_error(error) from None
-    raise _http_error(
-        ListingError(
-            501, "chat_not_available", "You can contact this owner. Chat opens in a later release."
-        )
-    )
+    chat, created = await chats_service.start_chat(session, listing, account)
+    if not created:
+        response.status_code = status.HTTP_200_OK
+    return ChatResponse.for_viewer(chat, account)
 
 
 @router.post(

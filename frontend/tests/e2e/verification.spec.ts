@@ -22,6 +22,18 @@ const offer = {
   expires_at: '2026-11-29T12:00:00Z',
 };
 
+const chat = {
+  id: '9c1f1d0e-5c3a-4a53-9f37-1d2f5b8c9a99',
+  listing: {
+    id: LISTING_ID,
+    title: 'Your brand on a design journal',
+    type: 'offer',
+    status: 'active',
+  },
+  counterpart: { id: '2', display_name: 'Digital Daily', role: 'provider' },
+  created_at: '2026-11-06T10:00:00Z',
+};
+
 // The preview runs without the API; this mock keeps the account's verification state.
 async function mockApi(page: Page) {
   const account = {
@@ -94,6 +106,9 @@ async function mockApi(page: Page) {
     if (path.endsWith(`/listings/${LISTING_ID}`)) {
       return route.fulfill({ status: 200, headers, json: offer });
     }
+    if (path.endsWith(`/chats/${chat.id}`)) {
+      return route.fulfill({ status: 200, headers, json: chat });
+    }
     if (path.endsWith('/phone-reveal') || path.endsWith('/chats')) {
       if (!verified) {
         return error(
@@ -103,11 +118,7 @@ async function mockApi(page: Page) {
         );
       }
       if (path.endsWith('/chats')) {
-        return error(
-          501,
-          'chat_not_available',
-          'You can contact this owner. Chat opens in a later release.',
-        );
+        return route.fulfill({ status: 201, headers, json: chat });
       }
       return route.fulfill({ status: 200, headers, json: { phone: '+380501110101' } });
     }
@@ -189,9 +200,8 @@ test('after verification the same actions are allowed', async ({ page }) => {
   await page.getByRole('button', { name: 'Reveal phone number' }).click();
   await expect(page.getByRole('link', { name: '+380501110101' })).toBeVisible();
   await page.getByRole('button', { name: 'Start chat' }).click();
-  await expect(
-    page.getByText('You can contact this owner. Chat opens in a later release.'),
-  ).toBeVisible();
+  await expect(page).toHaveURL(`/chats/${chat.id}`);
+  await expect(page.getByRole('heading', { name: 'Chat with Digital Daily' })).toBeVisible();
 
   await page.goto('/listings/new');
   await expect(page.getByLabel('Title')).toBeVisible();

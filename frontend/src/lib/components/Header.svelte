@@ -47,6 +47,7 @@
       </div>
       <div class="header-actions">
         {#if session.account}
+          <a class="sign-in-link" href="/chats">Chats</a>
           <a class="sign-in-link" href="/listings/mine">My listings</a>
           <a class="sign-in-link" href="/listings/new">New listing</a>
           <a class="button button-dark button-small" href="/account"

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 import adify_api.accounts.models  # noqa: F401
 import adify_api.auth.models  # noqa: F401
+import adify_api.chats.models  # noqa: F401
 import adify_api.listings.models  # noqa: F401
 import adify_api.orders.models  # noqa: F401
 import adify_api.verification.models  # noqa: F401
