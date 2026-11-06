@@ -27,6 +27,12 @@ const fields: RegistrationField[] = ['display_name', 'email', 'phone', 'role', '
 
 export const normalizePhone = (phone: string) => phone.replace(/[\s()-]/g, '');
 
+// FR-080, shared with password reset.
+export const passwordError = (password: string) =>
+  password.length < 8 || !/\p{L}/u.test(password) || !/\d/.test(password)
+    ? 'Use at least 8 characters, including at least one letter and one digit.'
+    : undefined;
+
 // Mirrors the API rules (FR-078, FR-080) so most mistakes are caught before a request.
 export function validateRegistration(input: RegistrationInput): FieldErrors {
   const errors: FieldErrors = {};
@@ -39,8 +45,8 @@ export function validateRegistration(input: RegistrationInput): FieldErrors {
     errors.phone = 'Enter a Ukrainian phone number in the format +380XXXXXXXXX.';
   if (input.role !== 'customer' && input.role !== 'provider')
     errors.role = 'Choose exactly one role: customer or provider.';
-  if (input.password.length < 8 || !/\p{L}/u.test(input.password) || !/\d/.test(input.password))
-    errors.password = 'Use at least 8 characters, including at least one letter and one digit.';
+  const password = passwordError(input.password);
+  if (password) errors.password = password;
   return errors;
 }
 

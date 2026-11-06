@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     verification_code_minutes: int = 15
     verification_max_attempts: int = 5
     verification_resend_seconds: int = 60
+    # FR-081: validity and resend wait are TBD in the SRS; these are the working defaults.
+    password_reset_minutes: int = 30
+    password_reset_resend_seconds: int = 60
 
 
 @lru_cache
