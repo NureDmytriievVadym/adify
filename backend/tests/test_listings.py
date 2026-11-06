@@ -1056,20 +1056,18 @@ async def test_owner_pauses_and_resumes_a_listing(client: AsyncClient, customer,
     assert listing["id"] not in await public_ids(client)
     mine = (await client.get("/api/v1/listings/mine", headers=provider)).json()
     assert [(item["id"], item["status"]) for item in mine["items"]] == [(listing["id"], "paused")]
-    blocked = await client.post(chat, headers=customer)
-    assert blocked.status_code == 409
-    assert error_type(blocked) == "listing_paused"
-    assert "not accepting new orders" in blocked.json()["detail"][0]["msg"]
+    # FR-026: a pause stops new orders, not conversations.
+    started = await client.post(chat, headers=customer)
+    assert started.status_code == 201
 
     resumed = await client.post(f"/api/v1/listings/{listing['id']}/resume", headers=provider)
 
     assert resumed.status_code == 200
     assert resumed.json()["status"] == "active"
     assert listing["id"] in await public_ids(client)
-    # Every order check passes again; only the chat itself is still to come.
     reopened = await client.post(chat, headers=customer)
-    assert reopened.status_code == 501
-    assert error_type(reopened) == "chat_not_available"
+    assert reopened.status_code == 200
+    assert reopened.json()["id"] == started.json()["id"]
 
 
 async def test_pausing_and_resuming_twice_changes_nothing(client: AsyncClient, provider):
@@ -1096,7 +1094,7 @@ async def test_a_paused_listing_can_still_be_edited(client: AsyncClient, provide
 
 
 @pytest.mark.parametrize("paused", [True, False])
-async def test_an_expired_listing_cannot_be_resumed_or_ordered(
+async def test_an_expired_listing_cannot_be_resumed_but_still_chats(
     client: AsyncClient, customer, provider, sessionmaker, paused
 ):
     listing = await publish(client, provider, OFFER)
@@ -1112,8 +1110,7 @@ async def test_an_expired_listing_cannot_be_resumed_or_ordered(
     assert resume.json()["detail"][0]["msg"] == "An expired listing cannot be resumed."
     assert pause.status_code == 409
     assert error_type(pause) == "listing_expired"
-    assert chat.status_code == 409
-    assert error_type(chat) == "listing_expired"
+    assert chat.status_code == 201
     details = (await client.get(base)).json()
     assert details["status"] == "expired"
     assert listing["id"] not in await public_ids(client)

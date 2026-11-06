@@ -280,7 +280,7 @@ async def test_verified_users_reveal_phones_create_listings_and_may_chat(
     assert reveal.json() == {"phone": "+380672222222"}
 
     chat = await client.post(f"/api/v1/listings/{offer}/chats", headers=customer)
-    assert (chat.status_code, error_type(chat)) == (501, "chat_not_available")
+    assert chat.status_code == 201
 
     created = await client.post("/api/v1/listings/requests", json=REQUEST, headers=customer)
     assert created.status_code == 201

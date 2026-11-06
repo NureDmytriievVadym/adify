@@ -1,6 +1,7 @@
 <script lang="ts">
   import { PUBLIC_API_BASE_URL } from '$app/env/public';
   import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import type { PageData } from './$types';
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
@@ -123,7 +124,7 @@
     stateError = null;
   });
 
-  // FR-018/FR-019: only an active listing takes new orders, and chats lead to orders.
+  // FR-018/FR-019: only an active listing takes new orders; FR-026 still allows chats.
   const closed = $derived(view?.status === 'paused' || view?.status === 'expired');
   const until = $derived(view?.expiresAt ? formatDate(view.expiresAt) : '');
 
@@ -161,13 +162,8 @@
     contacting = true;
     const result = await startChat(view.id);
     contacting = false;
-    // Every rule passed; only the chat itself is still to come (501).
-    contactResult =
-      !result.ok && result.type === 'chat_not_available'
-        ? { ok: true, message: result.message }
-        : result.ok
-          ? { ok: true, message: 'Chat started.' }
-          : result;
+    if (result.ok && result.chatId) return goto(`/chats/${result.chatId}`);
+    contactResult = result.ok ? null : result;
   }
 
   const attachmentUrl = (attachment: Attachment) => `${PUBLIC_API_BASE_URL}${attachment.url}`;
@@ -326,12 +322,8 @@
             <p class="small-note">This is your listing. Changes appear here as soon as you save.</p>
           {:else}
             <div class="preview-actions" aria-describedby="contact-note">
-              {#if view.sample || closed}
-                <button
-                  class="button button-dark"
-                  type="button"
-                  disabled
-                  aria-describedby={closed ? 'closed-note' : undefined}
+              {#if view.sample}
+                <button class="button button-dark" type="button" disabled
                   >Start chat <Icon name="social" size={18} /></button
                 >
               {:else if !session.account}
@@ -366,8 +358,8 @@
             {#if closed}
               <p id="closed-note" class="listing-state-note closed-note">
                 {view.status === 'paused'
-                  ? 'This listing is paused and is not accepting new orders.'
-                  : 'This listing has expired and is not accepting new orders.'}
+                  ? 'This listing is paused and is not accepting new orders. You can still chat with the owner.'
+                  : 'This listing has expired and is not accepting new orders. You can still chat with the owner.'}
               </p>
             {/if}
             {#if contactResult}

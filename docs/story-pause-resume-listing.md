@@ -28,14 +28,14 @@ by their link, where they are clearly marked, and their owner still sees them in
 
 ## New orders
 
-Chat and order creation do not exist yet (the chat endpoint answers `501`, and the
-`orders` table from FR-017 has no API). Both stories share one guard,
-`ensure_accepts_orders`:
+Order creation does not exist yet (the `orders` table from FR-017 has no API). It must
+call `ensure_accepts_orders`, which refuses a listing that is not active with `409
+listing_paused` or `409 listing_expired`, including for an order created from an
+existing chat (FR-031).
 
-- **Now:** `POST /api/v1/listings/{id}/chats` is where a conversation, and from it an
-  order, begins. It returns `409 listing_paused` or `409 listing_expired` for a
-  listing that is not active, after the existing FR-026 checks.
-- **Later:** order creation, including from an existing chat, must call the same guard.
+Chats are not blocked: FR-026 allows starting one from an active, paused, expired, or
+soft-deleted listing, so `POST /api/v1/listings/{id}/chats` does not call this guard
+(see [story #17](story-17.md)).
 
 Existing orders are not affected by a pause.
 
