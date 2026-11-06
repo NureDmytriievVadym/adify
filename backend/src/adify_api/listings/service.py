@@ -258,8 +258,8 @@ def ensure_can_chat(listing: Listing, account: Account) -> None:
 def ensure_accepts_orders(listing: Listing) -> None:
     """FR-018/FR-019: only an active listing takes new orders.
 
-    Starting a chat is the first step to an order, so the chat endpoint checks this now;
-    order creation (including from an existing chat) must call it as well.
+    Chats still start on paused and expired listings (FR-026); order creation, including
+    from an existing chat (FR-031), must call this.
     """
     status = listing.status
     if status == ListingStatus.PAUSED:

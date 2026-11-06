@@ -460,7 +460,7 @@ export const pauseListing = (id: string) => changeState(id, 'pause');
 export const resumeListing = (id: string) => changeState(id, 'resume');
 
 export type ContactResult =
-  { ok: true; phone?: string } | { ok: false; type: string; message: string };
+  { ok: true; phone?: string; chatId?: string } | { ok: false; type: string; message: string };
 
 // FR-024–FR-026: the API checks verification and chat rules; the page only shows the outcome.
 async function contact(id: string, action: 'phone-reveal' | 'chats'): Promise<ContactResult> {
@@ -480,7 +480,7 @@ async function contact(id: string, action: 'phone-reveal' | 'chats'): Promise<Co
   if (response.ok) {
     return action === 'phone-reveal'
       ? { ok: true, phone: ((await response.json()) as { phone: string }).phone }
-      : { ok: true };
+      : { ok: true, chatId: ((await response.json()) as { id: string }).id };
   }
   const [error] = await errorsOf(response);
   const type = error?.type ?? 'unknown';

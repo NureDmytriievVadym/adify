@@ -4,6 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 // FR-018/FR-019: the owner pauses and resumes a listing; an expired one cannot be resumed.
 
 const LISTING_ID = '0b6f1d0e-5c3a-4a53-9f37-1d2f5b8c9a10';
+const CHAT_ID = '9c1f1d0e-5c3a-4a53-9f37-1d2f5b8c9a99';
 
 type Status = 'active' | 'paused' | 'expired';
 
@@ -34,6 +35,7 @@ async function mockApi(page: Page, options: MockOptions = {}) {
     expires_at: status === 'expired' ? '2026-10-20T10:00:00Z' : '2026-12-01T10:00:00Z',
   };
   const calls: string[] = [];
+  const chatStore: object[] = [];
 
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
@@ -99,7 +101,17 @@ async function mockApi(page: Page, options: MockOptions = {}) {
     }
     if (path.endsWith('/chats') && method === 'POST') {
       calls.push('chat');
-      return route.fulfill({ status: 501, headers, json: { detail: [] } });
+      const chat = {
+        id: CHAT_ID,
+        listing: { id: LISTING_ID, title: stored.title, type: 'offer', status: stored.status },
+        counterpart: { id: '2', display_name: 'Digital Daily', role: 'provider' },
+        created_at: '2026-11-06T10:00:00Z',
+      };
+      chatStore.push(chat);
+      return route.fulfill({ status: 201, headers, json: chat });
+    }
+    if (path.endsWith(`/chats/${CHAT_ID}`)) {
+      return route.fulfill({ status: 200, headers, json: chatStore[0] });
     }
     if (path.endsWith('/listings/mine')) {
       const other = (state: Status, id: string, title: string) => ({
@@ -153,37 +165,41 @@ test('the owner pauses a listing and resumes it', async ({ page }) => {
   expect(calls).toEqual(['pause', 'resume']);
 });
 
-test('a paused listing takes no new orders from other users', async ({ page }) => {
+test('a paused listing takes no new orders but still opens a chat (FR-026)', async ({ page }) => {
   const calls = await mockApi(page, { role: 'customer', owner: false, status: 'paused' });
   await page.goto(listingPage);
 
   await expect(page.locator('.detail-title .listing-state')).toHaveText('Paused');
-  const chat = page.getByRole('button', { name: /Start chat/ });
-  await expect(chat).toBeDisabled();
   await expect(
-    page.getByText('This listing is paused and is not accepting new orders.'),
+    page.getByText(
+      'This listing is paused and is not accepting new orders. You can still chat with the owner.',
+    ),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reveal phone number' })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Pause listing' })).toHaveCount(0);
-  expect(calls).toEqual([]);
+
+  await page.getByRole('button', { name: /Start chat/ }).click();
+
+  await expect(page).toHaveURL(`/chats/${CHAT_ID}`);
+  await expect(page.locator('.listing-state')).toHaveText('Paused');
+  expect(calls).toEqual(['chat']);
 });
 
-test('guests cannot start an order from a paused listing either', async ({ page }) => {
+test('guests are sent to sign in before chatting on a paused listing', async ({ page }) => {
   await mockApi(page, { role: null, owner: false, status: 'paused' });
   await page.goto(listingPage);
 
-  await expect(page.getByRole('button', { name: /Start chat/ })).toBeDisabled();
-  await expect(page.getByRole('link', { name: /Start chat/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Start chat/ })).toHaveAttribute('href', '/sign-in');
 });
 
-test('an active listing still lets other users start a chat', async ({ page }) => {
+test('an active listing lets other users start a chat', async ({ page }) => {
   const calls = await mockApi(page, { role: 'customer', owner: false });
   await page.goto(listingPage);
 
   await page.getByRole('button', { name: /Start chat/ }).click();
 
-  await expect.poll(() => calls).toEqual(['chat']);
-  await expect(page.locator('.detail-title .listing-state')).toHaveCount(0);
+  await expect(page).toHaveURL(`/chats/${CHAT_ID}`);
+  expect(calls).toEqual(['chat']);
 });
 
 test('an expired listing cannot be resumed', async ({ page }) => {
@@ -224,7 +240,7 @@ test('paused and expired listing pages have no accessibility violations', async 
   await mockApi(page, { owner: false, role: 'customer', status: 'paused' });
   await page.setViewportSize({ width: 360, height: 900 });
   await page.goto(listingPage);
-  await expect(page.getByRole('button', { name: /Start chat/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Start chat/ })).toBeEnabled();
 
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag21a']).analyze();
   expect(results.violations).toEqual([]);

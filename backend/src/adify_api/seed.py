@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from adify_api.accounts.models import Account, AccountBan, AccountRole
 from adify_api.auth.models import RefreshToken
+from adify_api.chats.models import Chat
 from adify_api.core.config import get_settings
 from adify_api.core.db import get_sessionmaker
 from adify_api.core.security import hash_password
@@ -410,6 +411,11 @@ async def reset_demo_data(
         await session.execute(delete(RefreshToken).where(RefreshToken.account_id.in_(account_ids)))
         await session.execute(
             delete(VerificationCode).where(VerificationCode.account_id.in_(account_ids))
+        )
+        await session.execute(
+            delete(Chat).where(
+                or_(Chat.customer_id.in_(account_ids), Chat.provider_id.in_(account_ids))
+            )
         )
         await session.execute(delete(Account).where(Account.id.in_(account_ids)))
         await session.commit()

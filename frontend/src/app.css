@@ -2182,6 +2182,68 @@ main:focus {
   font-variant-numeric: tabular-nums;
 }
 
+.chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 720px;
+  display: grid;
+  gap: 12px;
+}
+.chat-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.chat-row:hover {
+  border-color: #ccd6c9;
+}
+.chat-row-text {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.chat-row-text span {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.chat-back {
+  margin-bottom: 20px;
+}
+.chat-back svg {
+  transform: rotate(180deg);
+}
+.chat-card {
+  max-width: 720px;
+}
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.chat-header h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  letter-spacing: -0.5px;
+}
+.chat-header .field-hint {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.chat-messages {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+
 @media (min-width: 1500px) {
   .hero {
     min-height: 700px;
