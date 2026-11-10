@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte';
   import LiveListingCard from '#lib/components/LiveListingCard.svelte';
+  import { page } from '$app/state';
   import { session } from '#lib/accounts/session.svelte.ts';
   import { fetchListings, type ListResult } from '#lib/listings/api.ts';
 
@@ -25,6 +26,14 @@
     </p>
   </div>
 
+  {#if page.state.listingDeleted}
+    <p class="save-notice" role="status">
+      <Icon name="check" size={16} />
+      {page.state.listingDeleted === 'removed'
+        ? 'Your listing was deleted.'
+        : 'Your listing was deleted. Its orders still show it, but it is gone from the marketplace.'}
+    </p>
+  {/if}
   {#if !session.account && session.restored}
     <p class="field-hint">Sign in to see your listings.</p>
     <a class="button button-dark" href="/sign-in">Sign in <Icon name="arrow" /></a>

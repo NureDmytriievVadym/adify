@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -230,3 +230,10 @@ class ListingPage(BaseModel):
 
 class PhoneReveal(BaseModel):
     phone: str
+
+
+class ListingDeletion(BaseModel):
+    """FR-020: ``removed`` when the listing is gone; ``soft_deleted`` when order history
+    keeps it."""
+
+    result: Literal["removed", "soft_deleted"]

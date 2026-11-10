@@ -95,8 +95,9 @@ Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md)
 [story #11](docs/story-11.md), [story #5](docs/story-05.md), [story #17](docs/story-17.md), [story #19](docs/story-19.md),
 [listings ADY-008–010](docs/story-08-10.md),
 [editing listings](docs/story-edit-listing.md),
-[password reset](docs/story-password-reset.md), and
-[pausing and resuming listings](docs/story-pause-resume-listing.md). The source
+[password reset](docs/story-password-reset.md),
+[pausing and resuming listings](docs/story-pause-resume-listing.md), and
+[deleting listings](docs/story-delete-listing.md). The source
 documents are supplied alongside this repository and are not modified here.
 
 Executed checks and the Docker-based browser-test command are recorded in

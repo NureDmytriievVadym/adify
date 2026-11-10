@@ -5,6 +5,7 @@
   import type { PageData } from './$types';
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
+    deleteListing,
     fetchListing,
     formatDate,
     formatDelivery,
@@ -116,16 +117,22 @@
   let contacting = $state(false);
   let changing = $state(false);
   let stateError: string | null = $state(null);
+  let confirmingDelete = $state(false);
+  let deleting = $state(false);
+  let deleteError: string | null = $state(null);
 
   $effect(() => {
     void data.listingId;
     phone = null;
     contactResult = null;
     stateError = null;
+    confirmingDelete = false;
+    deleteError = null;
   });
 
-  // FR-018/FR-019: only an active listing takes new orders; FR-026 still allows chats.
-  const closed = $derived(view?.status === 'paused' || view?.status === 'expired');
+  // FR-018–FR-020: only an active listing takes new orders; FR-026 still allows chats.
+  const closed = $derived(!!view && view.status !== 'active');
+  const stateLabels = { paused: 'Paused', expired: 'Expired', soft_deleted: 'Deleted' };
   const until = $derived(view?.expiresAt ? formatDate(view.expiresAt) : '');
 
   async function toggleState() {
@@ -144,6 +151,16 @@
       }
     }
     changing = false;
+  }
+
+  async function removeListing() {
+    if (!view?.id) return;
+    deleting = true;
+    deleteError = null;
+    const result = await deleteListing(view.id);
+    deleting = false;
+    if (result.ok) return goto('/listings/mine', { state: { listingDeleted: result.result } });
+    deleteError = result.message;
   }
 
   async function reveal() {
@@ -215,8 +232,8 @@
               : 'Ad request'}</span
           >
           {#if closed}
-            <span class="listing-state" class:expired={view.status === 'expired'}
-              >{view.status === 'paused' ? 'Paused' : 'Expired'}</span
+            <span class="listing-state" class:expired={view.status !== 'paused'}
+              >{stateLabels[view.status as keyof typeof stateLabels]}</span
             >
           {/if}
           <h1>{view.title}</h1>
@@ -297,7 +314,12 @@
           <div class="delivery-info">
             <Icon name="clock" size={18} /><span>Estimated delivery: {view.delivery}</span>
           </div>
-          {#if !view.sample && session.account && view.ownerId === session.account.id}
+          {#if !view.sample && session.account && view.ownerId === session.account.id && view.status === 'soft_deleted'}
+            <p class="listing-state-note closed-note">
+              You deleted this listing. It is hidden from the marketplace and kept only because
+              orders refer to it.
+            </p>
+          {:else if !view.sample && session.account && view.ownerId === session.account.id}
             <div class="preview-actions">
               <a class="button button-dark" href={`/listings/${view.id}/edit`}
                 >Edit listing <Icon name="arrow" size={18} /></a
@@ -320,6 +342,35 @@
                   : `Expired on ${until}. An expired listing cannot be resumed.`}
             </p>
             <p class="small-note">This is your listing. Changes appear here as soon as you save.</p>
+            <div class="delete-listing">
+              {#if confirmingDelete}
+                <p class="delete-question" id="delete-question">
+                  <strong>Delete this listing?</strong> If it has orders, it stays in their records but
+                  leaves the marketplace for good. Otherwise it is removed permanently.
+                </p>
+                <div class="delete-actions" role="group" aria-labelledby="delete-question">
+                  <button
+                    class="button button-small delete-confirm"
+                    type="button"
+                    disabled={deleting}
+                    onclick={removeListing}>Delete listing</button
+                  >
+                  <button
+                    class="button button-small button-outline"
+                    type="button"
+                    disabled={deleting}
+                    onclick={() => (confirmingDelete = false)}>Keep it</button
+                  >
+                </div>
+                {#if deleteError}<p class="field-error" role="alert">{deleteError}</p>{/if}
+              {:else}
+                <button
+                  class="delete-trigger"
+                  type="button"
+                  onclick={() => (confirmingDelete = true)}>Delete listing</button
+                >
+              {/if}
+            </div>
           {:else}
             <div class="preview-actions" aria-describedby="contact-note">
               {#if view.sample}
@@ -359,7 +410,9 @@
               <p id="closed-note" class="listing-state-note closed-note">
                 {view.status === 'paused'
                   ? 'This listing is paused and is not accepting new orders. You can still chat with the owner.'
-                  : 'This listing has expired and is not accepting new orders. You can still chat with the owner.'}
+                  : view.status === 'expired'
+                    ? 'This listing has expired and is not accepting new orders. You can still chat with the owner.'
+                    : 'The owner deleted this listing, so it is not accepting new orders. You can still chat with the owner.'}
               </p>
             {/if}
             {#if contactResult}

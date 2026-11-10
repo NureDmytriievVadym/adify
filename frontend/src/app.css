@@ -5487,6 +5487,43 @@ body {
   vertical-align: middle;
 }
 
+/* FR-020: deleting is kept quiet until asked for, then confirmed in place. */
+.delete-listing {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.delete-trigger {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #b3261e;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.delete-trigger:hover {
+  text-decoration: underline;
+}
+.delete-question {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.delete-confirm {
+  border-color: #b3261e;
+  background: #b3261e;
+  color: #fff;
+}
+
 .closed-note {
   margin: 12px 0 0;
   padding: 10px 12px;

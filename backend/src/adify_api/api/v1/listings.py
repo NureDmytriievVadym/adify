@@ -17,6 +17,7 @@ from adify_api.listings import service, storage
 from adify_api.listings.models import Listing, ListingCategory, ListingType
 from adify_api.listings.schemas import (
     AttachmentResponse,
+    ListingDeletion,
     ListingPage,
     ListingResponse,
     ListingSort,
@@ -113,7 +114,8 @@ async def list_listings(
 ) -> ListingPage:
     """Active public listings with search and filters (FR-015, FR-016, FR-084–FR-086).
 
-    Paused and expired listings are left out (FR-018, FR-019); they stay reachable by id.
+    Paused, expired, and soft-deleted listings are left out (FR-018–FR-020); they stay
+    reachable by id.
 
     ``q`` matches title, description, or category without regard to case. Price
     bounds apply to the price or budget in UAH. ``delivery_max`` is the maximum
@@ -164,7 +166,9 @@ async def list_listings(
 
 @router.get("/mine", response_model=ListingPage, responses=ERRORS)
 async def my_listings(account: CurrentAccount, session: SessionDep, page: PageDep) -> ListingPage:
-    """The signed-in account's own listings, newest first, including paused and expired ones."""
+    """The signed-in account's own listings, newest first, including paused and expired ones.
+
+    Soft-deleted listings are left out (FR-020)."""
     limit, offset = page
     listings, total = await service.list_listings(
         session, owner_id=account.id, limit=limit, offset=offset
@@ -214,7 +218,10 @@ async def update_listing(
 
 
 STATE_ERRORS = ERRORS | {
-    status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "The listing has expired"}
+    status.HTTP_409_CONFLICT: {
+        "model": ErrorResponse,
+        "description": "The listing has expired or was deleted",
+    }
 }
 
 
@@ -254,6 +261,26 @@ async def resume_listing(
     return await _own_view(session, listing)
 
 
+@router.delete("/{listing_id}", response_model=ListingDeletion, responses=ERRORS)
+async def delete_listing(
+    listing_id: uuid.UUID, account: CurrentAccount, session: SessionDep
+) -> ListingDeletion:
+    """Delete your listing (FR-020).
+
+    A listing with any order history is soft-deleted: hidden from search and from your
+    list, but kept so its orders still reach it (`soft_deleted`). A listing without
+    orders is removed permanently (`removed`). Like pausing, any signed-in owner may
+    delete, so a listing can always be withdrawn.
+    """
+    try:
+        listing = await service.get_listing(session, listing_id)
+        service.ensure_owner(listing, account)
+        kept = await service.delete_listing(session, listing)
+    except ListingError as error:
+        raise _http_error(error) from None
+    return ListingDeletion(result="soft_deleted" if kept else "removed")
+
+
 @router.get("/{listing_id}", response_model=ListingResponse, responses=ERRORS)
 async def get_listing(listing_id: uuid.UUID, session: SessionDep) -> ListingResponse:
     """Public listing details with the placement specification and attachments (ADY-010)."""
@@ -289,9 +316,11 @@ async def reveal_phone(
 async def start_chat(
     listing_id: uuid.UUID, account: VerifiedAccount, session: SessionDep, response: Response
 ) -> ChatResponse:
-    """FR-026: start a chat with the owner of an active, paused, or expired listing.
+    """FR-026: start a chat with the owner of an active, paused, expired, or soft-deleted
+    listing. A permanently deleted listing is not found.
 
-    Pausing or expiry stops new orders, not conversations; order creation checks that.
+    Pausing, expiry, or a soft delete stops new orders, not conversations; order
+    creation checks that.
     Starting the same chat again returns it with `200`.
     """
     try:

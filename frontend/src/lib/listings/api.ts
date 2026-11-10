@@ -2,8 +2,8 @@ import { PUBLIC_API_BASE_URL } from '$app/env/public';
 import { session } from '#lib/accounts/session.svelte.ts';
 
 export type ListingType = 'request' | 'offer';
-/** FR-018/FR-019: only an active listing appears in the marketplace and takes new orders. */
-export type ListingStatus = 'active' | 'paused' | 'expired';
+/** FR-018–FR-020: only an active listing appears in the marketplace and takes new orders. */
+export type ListingStatus = 'active' | 'paused' | 'expired' | 'soft_deleted';
 export type ListingField =
   'category' | 'title' | 'description' | 'price' | 'delivery_days' | 'specs' | 'audience';
 export type FieldErrors = Partial<Record<ListingField, string>>;
@@ -458,6 +458,33 @@ async function changeState(id: string, action: 'pause' | 'resume'): Promise<Stat
 
 export const pauseListing = (id: string) => changeState(id, 'pause');
 export const resumeListing = (id: string) => changeState(id, 'resume');
+
+export type DeleteResult =
+  { ok: true; result: 'removed' | 'soft_deleted' } | { ok: false; type: string; message: string };
+
+// FR-020: the API decides between a soft delete (order history) and a permanent removal.
+export async function deleteListing(id: string): Promise<DeleteResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/listings/${id}`, {
+      method: 'DELETE',
+      headers: authorization(),
+    });
+  } catch {
+    return {
+      ok: false,
+      type: 'unreachable',
+      message: 'Adify is unreachable. Try again in a moment.',
+    };
+  }
+  if (response.ok) return { ok: true, ...((await response.json()) as { result: 'removed' }) };
+  const [error] = await errorsOf(response);
+  return {
+    ok: false,
+    type: error?.type ?? 'unknown',
+    message: error?.msg ?? 'The listing could not be deleted. Try again in a moment.',
+  };
+}
 
 export type ContactResult =
   { ok: true; phone?: string; chatId?: string } | { ok: false; type: string; message: string };
