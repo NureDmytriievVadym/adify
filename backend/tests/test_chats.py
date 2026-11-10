@@ -69,8 +69,10 @@ async def test_customer_starts_a_chat_on_an_offer(client: AsyncClient, customer,
 
     assert response.status_code == 201
     chat = response.json()
+    owner_id = (await client.get(f"/api/v1/listings/{offer}")).json()["owner"]["id"]
     assert chat["listing"] == {
         "id": offer,
+        "owner_id": owner_id,
         "title": OFFER["title"],
         "type": "offer",
         "status": "active",

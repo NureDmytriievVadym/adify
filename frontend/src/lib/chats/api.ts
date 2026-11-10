@@ -4,7 +4,13 @@ import type { ListingStatus, ListingType } from '#lib/listings/api.ts';
 
 export interface Chat {
   id: string;
-  listing: { id: string; title: string; type: ListingType; status: ListingStatus } | null;
+  listing: {
+    id: string;
+    owner_id: string;
+    title: string;
+    type: ListingType;
+    status: ListingStatus;
+  } | null;
   counterpart: { id: string; display_name: string; role: 'customer' | 'provider' };
   created_at: string;
 }

@@ -12,6 +12,7 @@ from adify_api.accounts.models import Account
 from adify_api.core.config import get_settings
 from adify_api.listings.models import Listing, ListingType
 from adify_api.orders.models import Order, OrderStatus
+from adify_api.orders.service import requirements_snapshot
 
 pytestmark = pytest.mark.anyio
 
@@ -735,7 +736,7 @@ async def place_order(
     listing_id: str,
     status: OrderStatus = OrderStatus.IN_PROGRESS,
 ) -> None:
-    """Orders have no API yet, so the tests insert one between the owner and another account."""
+    """Inserts an order in any state; the order API only creates them awaiting payment."""
     async with sessionmaker() as session:
         listing = await session.get(Listing, uuid.UUID(listing_id))
         assert listing is not None
@@ -747,7 +748,15 @@ async def place_order(
             else (other, listing.owner_id)
         )
         session.add(
-            Order(listing_id=listing.id, customer_id=customer, provider_id=provider, status=status)
+            Order(
+                listing_id=listing.id,
+                owner_id=listing.owner_id,
+                customer_id=customer,
+                provider_id=provider,
+                status=status,
+                price=listing.price,
+                requirements=requirements_snapshot(listing),
+            )
         )
         await session.commit()
 
@@ -827,7 +836,7 @@ async def test_category_changes_while_no_order_is_active(client: AsyncClient, pr
 
 
 @pytest.mark.parametrize(
-    "status", [OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.DISPUTED]
+    "status", [OrderStatus.AWAITING_PAYMENT, OrderStatus.IN_PROGRESS, OrderStatus.DISPUTED]
 )
 async def test_an_active_order_locks_the_category_and_saves_nothing(
     client: AsyncClient, customer, provider, sessionmaker, status
@@ -872,7 +881,7 @@ async def test_other_fields_stay_editable_while_an_order_is_active(
     assert response.json()["locked_fields"] == ["category"]
 
 
-@pytest.mark.parametrize("status", [OrderStatus.COMPLETED, OrderStatus.CANCELLED])
+@pytest.mark.parametrize("status", [OrderStatus.DONE, OrderStatus.CANCELED, OrderStatus.REJECTED])
 async def test_closed_orders_do_not_lock_the_category(
     client: AsyncClient, customer, provider, sessionmaker, status
 ):
