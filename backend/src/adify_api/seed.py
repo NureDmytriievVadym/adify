@@ -40,6 +40,7 @@ from adify_api.listings.models import (
     ListingType,
 )
 from adify_api.orders.models import Order, OrderStatus
+from adify_api.orders.service import requirements_snapshot
 from adify_api.verification.models import VerificationCode
 
 DEFAULT_PASSWORD = "AdifyDemo123"
@@ -505,13 +506,18 @@ async def seed_demo_data(
             if await session.get(Order, order_id) is not None:
                 result.orders_existing += 1
                 continue
+            listing = await session.get(Listing, _listing_id(spec.listing))
             session.add(
                 Order(
                     id=order_id,
-                    listing_id=_listing_id(spec.listing),
+                    listing_id=listing.id,
+                    owner_id=listing.owner_id,
                     customer_id=accounts[spec.customer].id,
                     provider_id=accounts[spec.provider].id,
                     status=spec.status,
+                    details=f"Demo order for “{listing.title}”.",
+                    price=listing.price,
+                    requirements=requirements_snapshot(listing),
                 )
             )
             result.orders_created += 1

@@ -12,18 +12,21 @@ ADY-008–ADY-010 and the audience of ADY-011 (FR-082).
 
 ## Orders foundation
 
-FR-017 depends on whether a listing has an **active order**, but orders could not be
-created before this story. Migration `0006` adds a minimal `orders` table (listing,
-customer, provider, status, created time) and nothing else: there is no order API yet.
-The order stories will add the remaining columns, transitions, and endpoints.
+FR-017 depends on whether a listing has an **active order**: any state other than
+canceled, rejected, or done. Migration `0006` added a minimal `orders` table; story #19
+(migration `0010`) renamed its states to the SRS §3.4.4 names and added the order
+details, so orders are now created from a chat (see [story #19](story-19.md)).
 
-| Status        | Active | Reason                                   |
-| ------------- | ------ | ---------------------------------------- |
-| `pending`     | yes    | Agreed, work not started                 |
-| `in_progress` | yes    | Work under way                           |
-| `disputed`    | yes    | Not closed until the dispute is resolved |
-| `completed`   | no     | Closed                                   |
-| `cancelled`   | no     | Closed                                   |
+| Status             | Active | Reason                                   |
+| ------------------ | ------ | ---------------------------------------- |
+| `awaiting_payment` | yes    | Agreed, not paid yet                     |
+| `paid`             | yes    | Paid, work not started                   |
+| `in_progress`      | yes    | Work under way                           |
+| `in_review`        | yes    | Submitted for the customer's review      |
+| `disputed`         | yes    | Not closed until the dispute is resolved |
+| `done`             | no     | Closed                                   |
+| `canceled`         | no     | Closed                                   |
+| `rejected`         | no     | Closed                                   |
 
 `just seed` creates one `in_progress` order (Olena Marchenko ↔ Digital Daily) on the
 offering “Your brand, front and centre on a design journal”, so the rule can be

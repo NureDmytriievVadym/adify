@@ -11,6 +11,7 @@ from adify_api.listings.schemas import OwnerResponse
 
 class ChatListing(BaseModel):
     id: uuid.UUID
+    owner_id: uuid.UUID
     title: str
     type: ListingType
     status: ListingStatus
@@ -31,7 +32,11 @@ class ChatResponse(BaseModel):
         return cls(
             id=chat.id,
             listing=ChatListing(
-                id=listing.id, title=listing.title, type=listing.type, status=listing.status
+                id=listing.id,
+                owner_id=listing.owner_id,
+                title=listing.title,
+                type=listing.type,
+                status=listing.status,
             )
             if listing
             else None,

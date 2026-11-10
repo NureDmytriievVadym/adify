@@ -7,6 +7,7 @@ from adify_api.api.v1.auth import router as auth_router
 from adify_api.api.v1.chats import router as chats_router
 from adify_api.api.v1.health import router as health_router
 from adify_api.api.v1.listings import router as listings_router
+from adify_api.api.v1.orders import router as orders_router
 from adify_api.api.v1.verification import router as verification_router
 
 router = APIRouter(prefix="/api/v1")
@@ -16,3 +17,4 @@ router.include_router(verification_router)
 router.include_router(auth_router)
 router.include_router(listings_router)
 router.include_router(chats_router)
+router.include_router(orders_router)
