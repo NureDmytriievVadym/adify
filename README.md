@@ -92,7 +92,7 @@ justfile         Developer commands
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),
 [story #1](docs/story-01.md), [story #3](docs/story-03.md),
 [story #4](docs/story-04.md), [story #7](docs/story-07.md),
-[story #11](docs/story-11.md), [story #5](docs/story-05.md), [story #17](docs/story-17.md), [story #19](docs/story-19.md),
+[story #11](docs/story-11.md), [story #5](docs/story-05.md), [story #16](docs/story-16.md), [story #17](docs/story-17.md), [story #19](docs/story-19.md),
 [listings ADY-008–010](docs/story-08-10.md),
 [editing listings](docs/story-edit-listing.md),
 [password reset](docs/story-password-reset.md), and

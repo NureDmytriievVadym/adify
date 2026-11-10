@@ -146,6 +146,36 @@
     changing = false;
   }
 
+  let copied = $state(false);
+  let copyHint = $state(false);
+  let phoneText: HTMLSpanElement | undefined = $state();
+
+  // +380501110101 → +380 50 111 01 01, the way Ukrainian numbers are usually written.
+  const formatPhone = (raw: string) =>
+    raw.replace(/^\+380(\d{2})(\d{3})(\d{2})(\d{2})$/, '+380 $1 $2 $3 $4');
+
+  // The Clipboard API can be refused (permissions, insecure origins), so fall back step by step.
+  async function copyPhone() {
+    if (!phone) return;
+    copyHint = false;
+    try {
+      await navigator.clipboard.writeText(phone);
+    } catch {
+      const field = Object.assign(document.createElement('textarea'), { value: phone });
+      document.body.append(field);
+      field.select();
+      const done = document.execCommand('copy');
+      field.remove();
+      if (!done) {
+        getSelection()?.selectAllChildren(phoneText!);
+        copyHint = true;
+        return;
+      }
+    }
+    copied = true;
+    setTimeout(() => (copied = false), 2000);
+  }
+
   async function reveal() {
     if (!view?.id) return;
     contacting = true;
@@ -165,6 +195,8 @@
     if (result.ok && result.chatId) return goto(`/chats/${result.chatId}`);
     contactResult = result.ok ? null : result;
   }
+
+  const signInHref = $derived(`/sign-in?next=${encodeURIComponent(page.url.pathname)}`);
 
   const attachmentUrl = (attachment: Attachment) => `${PUBLIC_API_BASE_URL}${attachment.url}`;
 
@@ -327,7 +359,7 @@
                   >Start chat <Icon name="social" size={18} /></button
                 >
               {:else if !session.account}
-                <a class="button button-dark" href="/sign-in"
+                <a class="button button-dark" href={signInHref}
                   >Start chat <Icon name="social" size={18} /></a
                 >
               {:else}
@@ -343,9 +375,32 @@
                   >Reveal phone number</button
                 >
               {:else if !session.account}
-                <a class="button button-outline" href="/sign-in">Reveal phone number</a>
+                <a class="button button-outline" href={signInHref}>Reveal phone number</a>
               {:else if phone}
-                <a class="button button-outline revealed-phone" href={`tel:${phone}`}>{phone}</a>
+                <div class="revealed-phone">
+                  <div class="revealed-phone-text">
+                    <span class="revealed-phone-label">Phone</span>
+                    <span class="revealed-phone-number" bind:this={phoneText}
+                      >{formatPhone(phone)}</span
+                    >
+                  </div>
+                  <div class="revealed-phone-actions">
+                    <a class="phone-action phone-call" href={`tel:${phone}`}
+                      ><Icon name="phone" size={15} /><span class="phone-action-label">Call</span
+                      ></a
+                    >
+                    <button class="phone-action" type="button" onclick={copyPhone}
+                      ><Icon name={copied ? 'check' : 'copy'} size={15} /><span
+                        class="phone-action-label">{copied ? 'Copied' : 'Copy'}</span
+                      ></button
+                    >
+                  </div>
+                </div>
+                {#if copyHint}
+                  <p class="small-note" role="status">
+                    The number is selected. Press Ctrl+C (⌘C on a Mac) to copy it.
+                  </p>
+                {/if}
               {:else}
                 <button
                   class="button button-outline"
