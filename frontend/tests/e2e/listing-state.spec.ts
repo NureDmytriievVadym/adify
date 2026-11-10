@@ -189,7 +189,10 @@ test('guests are sent to sign in before chatting on a paused listing', async ({ 
   await mockApi(page, { role: null, owner: false, status: 'paused' });
   await page.goto(listingPage);
 
-  await expect(page.getByRole('link', { name: /Start chat/ })).toHaveAttribute('href', '/sign-in');
+  await expect(page.getByRole('link', { name: /Start chat/ })).toHaveAttribute(
+    'href',
+    `/sign-in?next=${encodeURIComponent(listingPage)}`,
+  );
 });
 
 test('an active listing lets other users start a chat', async ({ page }) => {

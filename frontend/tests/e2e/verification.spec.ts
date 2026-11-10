@@ -198,7 +198,7 @@ test('after verification the same actions are allowed', async ({ page }) => {
 
   await page.goto(`/listings/${LISTING_ID}`);
   await page.getByRole('button', { name: 'Reveal phone number' }).click();
-  await expect(page.getByRole('link', { name: '+380501110101' })).toBeVisible();
+  await expect(page.getByText('+380 50 111 01 01')).toBeVisible();
   await page.getByRole('button', { name: 'Start chat' }).click();
   await expect(page).toHaveURL(`/chats/${chat.id}`);
   await expect(page.getByRole('heading', { name: 'Chat with Digital Daily' })).toBeVisible();

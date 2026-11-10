@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import Icon from '#lib/components/Icon.svelte';
   import { session, signIn } from '#lib/accounts/session.svelte.ts';
 
@@ -10,8 +11,14 @@
   let submitting = $state(false);
   let alert: HTMLParagraphElement | undefined = $state();
 
+  // Return to the page that asked for sign-in; only same-site paths, never another origin.
+  const next = $derived.by(() => {
+    const target = page.url.searchParams.get('next') ?? '';
+    return target.startsWith('/') && !target.startsWith('//') ? target : '/account';
+  });
+
   $effect(() => {
-    if (session.account) goto('/account', { replaceState: true });
+    if (session.account) goto(next, { replaceState: true });
   });
 
   async function submit(event: SubmitEvent) {

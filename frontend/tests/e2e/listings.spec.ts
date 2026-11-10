@@ -325,7 +325,7 @@ test('shows a published listing with its specification and attachments', async (
   await expect(page.getByText('728 × 90 px')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Reveal phone number' })).toHaveAttribute(
     'href',
-    '/sign-in',
+    `/sign-in?next=${encodeURIComponent(`/listings/${LISTING_ID}`)}`,
   );
   await expect(page.getByRole('link', { name: /banner\.png/ })).toBeVisible();
   await expect(page.getByText('olena@example.com')).toHaveCount(0);
