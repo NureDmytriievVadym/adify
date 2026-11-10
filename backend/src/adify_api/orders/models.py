@@ -57,6 +57,8 @@ class Order(Base):
     deadline: Mapped[date | None] = mapped_column(Date)
     requirements: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # FR-038: when Mono confirmed the hold; the 7-day start timeout (ADY-021) counts from it.
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     listing: Mapped[Listing] = relationship(lazy="selectin")
     customer: Mapped[Account] = relationship(foreign_keys=[customer_id], lazy="selectin")

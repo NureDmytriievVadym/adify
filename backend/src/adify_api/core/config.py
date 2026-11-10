@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # FR-081: validity and resend wait are TBD in the SRS; these are the working defaults.
     password_reset_minutes: int = 30
     password_reset_resend_seconds: int = 60
+    # FR-038, SW-001: Mono acquiring. Empty token means payments are unavailable; a test
+    # token from api.monobank.ua works with test cards. Never commit a real token.
+    mono_token: str = ""
+    mono_api_url: str = "https://api.monobank.ua"
+    # Public base URL of this API that Mono can reach for webhooks. Left empty locally,
+    # where the order page syncs the invoice status from Mono instead.
+    api_public_url: str = ""
 
 
 @lru_cache
