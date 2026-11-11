@@ -5393,8 +5393,23 @@ body {
 
 /* FR-017: editing a listing */
 .card-edit {
+  position: relative;
+  z-index: 2;
   display: inline-block;
   margin-bottom: 17px;
+}
+
+/* The title link stretches over the whole card, so a click anywhere (the bottom arrow too)
+   opens the listing while keyboards and screen readers still meet a single link. */
+.listing-card {
+  position: relative;
+}
+
+.listing-card h3 a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .locked-hint {
