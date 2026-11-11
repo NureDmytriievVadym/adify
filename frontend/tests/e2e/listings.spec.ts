@@ -547,6 +547,19 @@ test('360px live listings use one column and open details', async ({ page }) => 
   await expect(page.getByRole('heading', { name: 'Placement specification' })).toBeVisible();
 });
 
+test('clicking anywhere on a card, the bottom arrow too, opens the listing', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/');
+
+  const card = page.locator('.listing-card', { hasText: 'A provider offering' });
+  await expect(card.getByRole('link')).toHaveCount(1);
+  await card.locator('.card-arrow').scrollIntoViewIfNeeded();
+  const arrow = await card.locator('.card-arrow').boundingBox();
+  await page.mouse.click(arrow!.x + arrow!.width / 2, arrow!.y + arrow!.height / 2);
+
+  await expect(page).toHaveURL(`/listings/${LISTING_ID}`);
+});
+
 test('the home page highlights the latest public listings', async ({ page }) => {
   await mockApi(page, null);
   await page.goto('/');
