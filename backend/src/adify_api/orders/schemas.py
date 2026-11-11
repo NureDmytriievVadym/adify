@@ -82,6 +82,7 @@ class OrderResponse(BaseModel):
     customer: OwnerResponse
     provider: OwnerResponse
     created_at: datetime
+    paid_at: datetime | None
 
     @classmethod
     def for_viewer(cls, order: Order, viewer: Account) -> "OrderResponse":
@@ -106,4 +107,5 @@ class OrderResponse(BaseModel):
             customer=public(order.customer),
             provider=public(order.provider),
             created_at=order.created_at,
+            paid_at=order.paid_at,
         )

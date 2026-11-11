@@ -5,13 +5,48 @@
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
     fetchOrder,
+    fetchPayment,
     formatDay,
+    startPayment,
     statusLabel,
     type Order,
     type OrderResult,
+    type Payment,
   } from '#lib/orders/api.ts';
 
   let result: OrderResult<Order> | null = $state(null);
+  let paymentNote: string | null = $state(null);
+  let paymentError: string | null = $state(null);
+  let paying = $state(false);
+
+  // What the customer sees after Mono sends them back to the order.
+  function returnNote(payment: Payment): string | null {
+    if (payment.status === 'created' || payment.status === 'processing')
+      return 'Mono is still processing the payment. Refresh this page in a moment.';
+    if (payment.status === 'failure')
+      return `The payment did not go through${payment.failure_reason ? ` (${payment.failure_reason})` : ''}. You can try again.`;
+    if (payment.status === 'expired') return 'The payment page expired. Start the payment again.';
+    return null;
+  }
+
+  async function load(id: string, returning: boolean) {
+    // The payment is read first: reading it syncs the invoice, which may mark the order paid.
+    const payment = returning ? await fetchPayment(id) : null;
+    const next = await fetchOrder(id);
+    if (page.params.id !== id) return;
+    result = next;
+    paymentNote = payment?.ok ? returnNote(payment.value) : null;
+  }
+
+  // FR-038: the customer pays on Mono's page; the funds are held until work starts.
+  async function pay(order: Order) {
+    paying = true;
+    paymentError = null;
+    const started = await startPayment(order.id);
+    if (started.ok && started.value.page_url) return window.location.assign(started.value.page_url);
+    paying = false;
+    paymentError = started.ok ? 'The payment could not be started. Try again.' : started.message;
+  }
 
   // FR-036: the listing owner may be either party, so the page marks who is who.
   function partyNote(order: Order, partyId: string) {
@@ -26,9 +61,9 @@
     const id = page.params.id;
     if (!session.account || !id) return;
     result = null;
-    fetchOrder(id).then((next) => {
-      if (page.params.id === id) result = next;
-    });
+    paymentNote = null;
+    paymentError = null;
+    load(id, page.url.searchParams.get('payment') === 'return');
   });
 </script>
 
@@ -88,6 +123,33 @@
           <dd>{order.deadline ? formatDay(order.deadline) : 'No overall deadline'}</dd>
         </div>
       </dl>
+
+      {#if order.status === 'awaiting_payment' || order.status === 'paid'}
+        <h2 class="account-title">Payment</h2>
+        {#if order.status === 'paid'}
+          <p class="field-hint" role="status">
+            Paid{order.paid_at ? ` on ${formatDay(order.paid_at.slice(0, 10))}` : ''}. Mono holds
+            the funds until the provider starts work.
+          </p>
+        {:else if order.customer.id === session.account?.id}
+          <p class="field-hint">
+            Pay by card in UAH through Mono. The funds are held, not charged, until the provider
+            starts work.
+          </p>
+          {#if paymentNote}<p class="form-alert" role="alert">{paymentNote}</p>{/if}
+          {#if paymentError}<p class="form-alert" role="alert">{paymentError}</p>{/if}
+          <button
+            type="button"
+            class="button button-dark"
+            disabled={paying}
+            onclick={() => pay(order)}
+            >{paying ? 'Opening Mono…' : `Pay ${formatUah(Number(order.price_uah))}`}
+            <Icon name="arrow" /></button
+          >
+        {:else}
+          <p class="field-hint">Waiting for the customer to pay through Mono.</p>
+        {/if}
+      {/if}
 
       <h2 class="account-title">Work stages</h2>
       {#if order.stages.length === 0}

@@ -10,6 +10,7 @@ import adify_api.auth.models  # noqa: F401
 import adify_api.chats.models  # noqa: F401
 import adify_api.listings.models  # noqa: F401
 import adify_api.orders.models  # noqa: F401
+import adify_api.payments.models  # noqa: F401
 import adify_api.verification.models  # noqa: F401
 from adify_api.core.config import get_settings
 from adify_api.core.db import Base

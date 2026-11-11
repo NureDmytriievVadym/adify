@@ -37,6 +37,19 @@ export interface Order {
   customer: Party;
   provider: Party;
   created_at: string;
+  paid_at: string | null;
+}
+
+// Mono invoice statuses as the API reports them (FR-038).
+export type PaymentStatus =
+  'created' | 'processing' | 'hold' | 'success' | 'failure' | 'reversed' | 'expired';
+
+export interface Payment {
+  status: PaymentStatus;
+  amount_uah: string;
+  page_url: string | null;
+  failure_reason: string | null;
+  created_at: string;
 }
 
 export interface StageInput {
@@ -93,6 +106,11 @@ async function request<T>(path: string, body?: object): Promise<OrderResult<T>> 
 
 export const fetchChatOrders = (chatId: string) => request<Order[]>(`/chats/${chatId}/orders`);
 export const fetchOrder = (id: string) => request<Order>(`/orders/${id}`);
+
+// FR-038: the API answers with Mono's payment page; an open invoice is reused.
+export const startPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`, {});
+// Reading the payment also syncs it from Mono, so it works where webhooks cannot arrive.
+export const fetchPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`);
 
 // FR-033, FR-037: mirrors the API rules so most mistakes are explained before sending.
 export function validateOrder(input: OrderInput): string | null {
