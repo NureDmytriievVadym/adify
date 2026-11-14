@@ -16,6 +16,7 @@ OFFER = {
     "description": "A display banner placement on an independent design journal.",
     "price_uah": "3500.50",
     "delivery_days": 5,
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [{"label": "Dimensions", "value": "728 x 90 px"}],
 }
 REQUEST = {
@@ -23,6 +24,7 @@ REQUEST = {
     "title": "Looking for a home for our story",
     "description": "We want a website to publish a sponsored article about our brand.",
     "budget_uah": "4500",
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [],
 }
 

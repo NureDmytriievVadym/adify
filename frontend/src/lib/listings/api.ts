@@ -5,7 +5,14 @@ export type ListingType = 'request' | 'offer';
 /** FR-018–FR-020: only an active listing appears in the marketplace and takes new orders. */
 export type ListingStatus = 'active' | 'paused' | 'expired' | 'soft_deleted';
 export type ListingField =
-  'category' | 'title' | 'description' | 'price' | 'delivery_days' | 'specs' | 'audience';
+  | 'category'
+  | 'title'
+  | 'description'
+  | 'expiry_date'
+  | 'price'
+  | 'delivery_days'
+  | 'specs'
+  | 'audience';
 export type FieldErrors = Partial<Record<ListingField, string>>;
 
 export interface Spec {
@@ -25,6 +32,7 @@ export interface ListingInput {
   category: string;
   title: string;
   description: string;
+  expiryDate: string;
   price: string;
   delivery_days: string;
   specs: Spec[];
@@ -63,7 +71,10 @@ export interface ApiListing {
   audience: ApiAudience | null;
   owner: { id: string; display_name: string; role: 'customer' | 'provider' };
   attachments: Attachment[];
+  created_at: string;
   status: ListingStatus;
+  /** FR-021: 23:59 Kyiv time on this owner-selected date. */
+  expiry_date: string;
   expires_at: string;
   /** Owner view only (FR-017): fields that cannot change right now, e.g. `category`. */
   locked_fields?: ListingField[];
@@ -82,6 +93,25 @@ const ATTACHMENT_EXTENSIONS = /\.(jpe?g|png|gif|webp|mp4|pdf)$/i;
 export const isListingId = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
+/** The current calendar date in Kyiv, the time zone FR-021 uses for listing expiry. */
+export function kyivToday(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Kyiv',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+/** The create form starts with the same 30-day lifetime the SRS-era default used. */
+export function defaultExpiryDate(days = 30): string {
+  const [year, month, day] = kyivToday().split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
 export const formatSize = (bytes: number) =>
   bytes < 1024 * 1024
     ? `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -92,11 +122,26 @@ export const formatDate = (iso: string) =>
     new Date(iso),
   );
 
+/** Format an owner-selected ``YYYY-MM-DD`` without shifting it into another day. */
+export const formatDay = (day: string) => {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, date)));
+};
+
 export const formatDelivery = (days: number | null) =>
   days === null ? 'To be agreed' : `${days} ${days === 1 ? 'day' : 'days'}`;
 
 // Mirrors the API rules so most mistakes are caught before a request.
-export function validateListing(input: ListingInput, type: ListingType): FieldErrors {
+export function validateListing(
+  input: ListingInput,
+  type: ListingType,
+  options: { allowPastExpiry?: boolean } = {},
+): FieldErrors {
   const errors: FieldErrors = {};
   if (!input.category) errors.category = 'Choose a category.';
   const title = input.title.trim();
@@ -104,6 +149,18 @@ export function validateListing(input: ListingInput, type: ListingType): FieldEr
   const description = input.description.trim();
   if (description.length < 20 || description.length > 5000)
     errors.description = 'Use 20 to 5,000 characters.';
+
+  const expiry = input.expiryDate.trim();
+  const parsed = new Date(`${expiry}T00:00:00Z`);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(expiry) ||
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== expiry
+  ) {
+    errors.expiry_date = 'Choose an expiry date.';
+  } else if (!options.allowPastExpiry && expiry < kyivToday()) {
+    errors.expiry_date = 'Choose today or a later date.';
+  }
 
   const price = input.price.trim();
   const noun = type === 'request' ? 'budget' : 'price';
@@ -170,6 +227,7 @@ const apiField: Record<string, ListingField> = {
   category: 'category',
   title: 'title',
   description: 'description',
+  expiry_date: 'expiry_date',
   budget_uah: 'price',
   price_uah: 'price',
   delivery_days: 'delivery_days',
@@ -210,6 +268,7 @@ function listingBody(type: ListingType, input: ListingInput, mode: 'create' | 'u
     category: input.category,
     title: input.title.trim(),
     description: input.description.trim(),
+    expiry_date: input.expiryDate,
     [type === 'request' ? 'budget_uah' : 'price_uah']: input.price.trim().replace(',', '.'),
     delivery_days: days ? Number(days) : clear,
     specs: input.specs
@@ -280,6 +339,7 @@ export function inputFromListing(listing: ApiListing): ListingInput {
     category: listing.category,
     title: listing.title,
     description: listing.description,
+    expiryDate: listing.expiry_date,
     price: listing.price_uah.replace(/\.00$/, ''),
     delivery_days: listing.delivery_days === null ? '' : String(listing.delivery_days),
     specs: listing.specs.length

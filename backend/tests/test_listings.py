@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from adify_api.accounts.models import Account
 from adify_api.core.config import get_settings
+from adify_api.listings.expiry import expiry_date, expiry_moment, today_in_kyiv
 from adify_api.listings.models import Listing, ListingType
 from adify_api.orders.models import Order, OrderStatus
 from adify_api.orders.service import requirements_snapshot
@@ -25,6 +26,7 @@ REQUEST = {
     "title": "Looking for a home for our story",
     "description": "We want a website to publish a sponsored article about our brand.",
     "budget_uah": "4500",
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [{"label": "Length", "value": "1,000 words"}],
 }
 OFFER = {
@@ -33,6 +35,7 @@ OFFER = {
     "description": "A display banner placement on an independent design journal.",
     "price_uah": "3500.50",
     "delivery_days": 5,
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [{"label": "Dimensions", "value": "728 x 90 px"}],
 }
 
@@ -1037,18 +1040,19 @@ async def public_ids(client: AsyncClient) -> list[str]:
     return [item["id"] for item in (await client.get("/api/v1/listings")).json()["items"]]
 
 
-async def test_a_new_listing_is_active_for_the_configured_lifetime(
-    client: AsyncClient, provider, monkeypatch
-):
-    monkeypatch.setattr(get_settings(), "listing_lifetime_days", 7)
+async def test_the_owner_selected_expiry_date_becomes_2359_kyiv(client: AsyncClient, provider):
+    """FR-021: the listing ends at 23:59 Kyiv time on the date the owner chose."""
+    day = today_in_kyiv() + timedelta(days=7)
 
-    listing = await publish(client, provider, OFFER)
+    listing = await publish(client, provider, OFFER | {"expiry_date": day.isoformat()})
 
     assert listing["status"] == "active"
-    lifetime = datetime.fromisoformat(listing["expires_at"]) - datetime.fromisoformat(
-        listing["created_at"]
-    )
-    assert timedelta(days=7) - timedelta(minutes=1) < lifetime < timedelta(days=7, minutes=1)
+    assert listing["expiry_date"] == day.isoformat()
+    expires_at = datetime.fromisoformat(listing["expires_at"])
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    assert expires_at == expiry_moment(day)
+    assert expiry_date(expires_at) == day
 
 
 async def test_owner_pauses_and_resumes_a_listing(client: AsyncClient, customer, provider):

@@ -32,7 +32,8 @@ async function mockApi(page: Page, options: MockOptions = {}) {
     attachments: [],
     created_at: '2026-11-01T10:00:00Z',
     status: status as Status,
-    expires_at: status === 'expired' ? '2026-10-20T10:00:00Z' : '2026-12-01T10:00:00Z',
+    expiry_date: status === 'expired' ? '2026-10-20' : '2026-12-01',
+    expires_at: status === 'expired' ? '2026-10-20T21:59:00Z' : '2026-12-01T21:59:00Z',
   };
   const calls: string[] = [];
   const chatStore: object[] = [];

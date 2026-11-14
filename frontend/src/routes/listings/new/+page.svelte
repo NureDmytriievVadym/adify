@@ -8,6 +8,7 @@
   import {
     MAX_ATTACHMENTS,
     createListing,
+    defaultExpiryDate,
     formatSize,
     uploadAttachment,
     validateFiles,
@@ -21,6 +22,7 @@
     'category',
     'title',
     'description',
+    'expiry_date',
     'price',
     'delivery_days',
     'specs',
@@ -33,6 +35,7 @@
     category: '',
     title: '',
     description: '',
+    expiryDate: defaultExpiryDate(),
     price: '',
     delivery_days: '',
     specs: [{ label: '', value: '' }],
