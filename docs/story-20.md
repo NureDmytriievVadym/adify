@@ -71,7 +71,7 @@ Use one only on your own machine, in `.env` (see `.env.example`), never shared o
 
 ## Persistence
 
-Migration `0011` creates `payments` (order, Mono invoice id, page URL, amount, Mono status,
+Migration `0012` creates `payments` (order, Mono invoice id, page URL, amount, Mono status,
 failure reason, Mono's `modifiedDate` of the last applied update) and adds `paid_at` to
 `orders`. A new invoice is created for each payment attempt; earlier ones stay as history.
 
