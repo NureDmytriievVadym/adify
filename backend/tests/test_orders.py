@@ -135,6 +135,7 @@ async def test_snapshot_copies_the_offer_requirements(client: AsyncClient, provi
         "category": "website-banners",
         "has_requirements": True,
         "specs": [{"label": "Dimensions", "value": "728 x 90 px"}],
+        "requires_creatives": False,
     }
 
 
@@ -155,6 +156,7 @@ async def test_snapshot_records_an_ad_request_without_requirements(
         "category": "sponsored-articles",
         "has_requirements": False,
         "specs": [],
+        "requires_creatives": False,
     }
 
 

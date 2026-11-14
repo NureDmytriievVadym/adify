@@ -10,13 +10,15 @@ from adify_api.auth.dependencies import CurrentAccount, VerifiedAccount
 from adify_api.chats import service as chats
 from adify_api.chats.service import ChatError
 from adify_api.core.db import get_session
-from adify_api.orders import service
+from adify_api.orders import service, workflow
 from adify_api.orders.schemas import OrderCreate, OrderResponse
 from adify_api.orders.service import OrderError
+from adify_api.payments.mono import MonoClient, get_mono
 
 router = APIRouter(tags=["Orders"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+MonoDep = Annotated[MonoClient | None, Depends(get_mono)]
 
 ERRORS = {
     status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Not signed in"},
@@ -81,6 +83,37 @@ async def get_order(
     """One order for its customer and provider only."""
     try:
         order = await service.get_order(session, order_id, account)
+    except OrderError as error:
+        raise http_error(error) from None
+    return OrderResponse.for_viewer(order, account)
+
+
+@router.post(
+    "/orders/{order_id}/start",
+    response_model=OrderResponse,
+    responses=ERRORS
+    | {
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Not paid, or a validated creative is missing",
+        },
+        status.HTTP_502_BAD_GATEWAY: {"model": ErrorResponse, "description": "Mono failed"},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": ErrorResponse,
+            "description": "Payments are not configured",
+        },
+    },
+)
+async def start_work(
+    order_id: uuid.UUID, account: VerifiedAccount, session: SessionDep, mono: MonoDep
+) -> OrderResponse:
+    """FR-039: the provider starts a paid order; Mono charges the held funds (FR-056).
+
+    Blocked while the order needs a validated creative it does not have (FR-124).
+    """
+    try:
+        order = await service.get_order(session, order_id, account)
+        order = await workflow.start_work(session, order, account, mono)
     except OrderError as error:
         raise http_error(error) from None
     return OrderResponse.for_viewer(order, account)

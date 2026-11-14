@@ -24,6 +24,12 @@ class OrderStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class CancelReason(StrEnum):
+    """Why an order was canceled; ADY-025 and ADY-026 add the participants' own reasons."""
+
+    START_TIMEOUT = "start_timeout"
+
+
 # FR-017: an order is active in any state other than canceled, rejected, or done.
 ACTIVE_ORDER_STATUSES = frozenset(OrderStatus) - {
     OrderStatus.DONE,
@@ -59,6 +65,10 @@ class Order(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # FR-038: when Mono confirmed the hold; the 7-day start timeout (ADY-021) counts from it.
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # FR-039: the provider confirmed the requirements and Mono charged the held funds.
+    work_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_reason: Mapped[str | None] = mapped_column(String(40))
 
     listing: Mapped[Listing] = relationship(lazy="selectin")
     customer: Mapped[Account] = relationship(foreign_keys=[customer_id], lazy="selectin")

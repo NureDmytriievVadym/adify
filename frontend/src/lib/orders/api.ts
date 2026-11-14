@@ -30,6 +30,7 @@ export interface Order {
     category: string;
     has_requirements: boolean;
     specs: Spec[];
+    requires_creatives: boolean;
   };
   listing: { id: string; title: string; type: ListingType };
   chat_id: string | null;
@@ -38,6 +39,13 @@ export interface Order {
   provider: Party;
   created_at: string;
   paid_at: string | null;
+  // FR-132: a paid order not started by then is canceled and the hold released.
+  start_deadline: string | null;
+  work_started_at: string | null;
+  // FR-124: why Start work is unavailable, such as "No validated creative".
+  work_start_blocker: string | null;
+  canceled_at: string | null;
+  cancel_reason: 'start_timeout' | null;
 }
 
 // Mono invoice statuses as the API reports them (FR-038).
@@ -111,6 +119,18 @@ export const fetchOrder = (id: string) => request<Order>(`/orders/${id}`);
 export const startPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`, {});
 // Reading the payment also syncs it from Mono, so it works where webhooks cannot arrive.
 export const fetchPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`);
+// FR-039: the provider starts a paid order; Mono charges the held funds.
+export const startWork = (orderId: string) => request<Order>(`/orders/${orderId}/start`, {});
+
+// Times such as the start deadline are shown in the viewer's own zone.
+export const formatMoment = (moment: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(moment));
 
 // FR-033, FR-037: mirrors the API rules so most mistakes are explained before sending.
 export function validateOrder(input: OrderInput): string | null {

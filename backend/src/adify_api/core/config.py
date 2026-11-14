@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # Public base URL of this API that Mono can reach for webhooks. Left empty locally,
     # where the order page syncs the invoice status from Mono instead.
     api_public_url: str = ""
+    # FR-132: a paid order the provider has not started is canceled after this many days.
+    # Mono cancels an unfinalized hold after 9 days, so the platform must act first.
+    paid_order_start_timeout_days: int = 7
 
 
 @lru_cache

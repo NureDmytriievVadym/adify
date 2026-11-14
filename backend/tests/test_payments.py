@@ -26,6 +26,8 @@ class FakeMono:
         self.key = ec.generate_private_key(ec.SECP256R1())
         self.invoices: list[dict] = []
         self.statuses: dict[str, dict] = {}
+        self.finalized: list[tuple[str, Decimal]] = []
+        self.canceled: list[str] = []
         self.down = False
 
     async def create_hold_invoice(self, **invoice) -> dict:
@@ -34,6 +36,18 @@ class FakeMono:
         self.invoices.append(invoice)
         invoice_id = f"inv{len(self.invoices)}"
         return {"invoiceId": invoice_id, "pageUrl": f"https://pay.mbnk.biz/{invoice_id}"}
+
+    async def finalize_hold(self, invoice_id: str, amount: Decimal) -> dict:
+        if self.down:
+            raise MonoError("Mono answered 500")
+        self.finalized.append((invoice_id, amount))
+        return {"status": "success"}
+
+    async def cancel_invoice(self, invoice_id: str) -> dict:
+        if self.down:
+            raise MonoError("Mono answered 500")
+        self.canceled.append(invoice_id)
+        return {"status": "success"}
 
     async def invoice_status(self, invoice_id: str) -> dict:
         if self.down:

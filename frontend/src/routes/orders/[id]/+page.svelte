@@ -7,7 +7,9 @@
     fetchOrder,
     fetchPayment,
     formatDay,
+    formatMoment,
     startPayment,
+    startWork,
     statusLabel,
     type Order,
     type OrderResult,
@@ -18,6 +20,8 @@
   let paymentNote: string | null = $state(null);
   let paymentError: string | null = $state(null);
   let paying = $state(false);
+  let starting = $state(false);
+  let startError: string | null = $state(null);
 
   // What the customer sees after Mono sends them back to the order.
   function returnNote(payment: Payment): string | null {
@@ -48,6 +52,16 @@
     paymentError = started.ok ? 'The payment could not be started. Try again.' : started.message;
   }
 
+  // FR-039: starting work confirms the requirements; Mono then charges the held funds.
+  async function begin(order: Order) {
+    starting = true;
+    startError = null;
+    const started = await startWork(order.id);
+    starting = false;
+    if (started.ok) result = started;
+    else startError = started.message;
+  }
+
   // FR-036: the listing owner may be either party, so the page marks who is who.
   function partyNote(order: Order, partyId: string) {
     const me = session.account?.id;
@@ -63,6 +77,7 @@
     result = null;
     paymentNote = null;
     paymentError = null;
+    startError = null;
     load(id, page.url.searchParams.get('payment') === 'return');
   });
 </script>
@@ -149,6 +164,54 @@
         {:else}
           <p class="field-hint">Waiting for the customer to pay through Mono.</p>
         {/if}
+      {/if}
+
+      {#if order.status === 'paid'}
+        <h2 class="account-title">Start work</h2>
+        {#if order.provider.id === session.account?.id}
+          <p class="field-hint">
+            Starting work confirms that you received and understood the order requirements. Mono
+            then charges the held funds.
+          </p>
+          {#if order.start_deadline}
+            <p class="field-hint">
+              Start by {formatMoment(order.start_deadline)}. Otherwise the order is canceled and the
+              funds go back to the customer.
+            </p>
+          {/if}
+          {#if order.work_start_blocker}
+            <p class="form-alert" id="start-blocker">
+              {order.work_start_blocker}. The customer must attach a creative that passes validation
+              before work can start.
+            </p>
+          {/if}
+          {#if startError}<p class="form-alert" role="alert">{startError}</p>{/if}
+          <button
+            type="button"
+            class="button button-dark"
+            disabled={starting || Boolean(order.work_start_blocker)}
+            aria-describedby={order.work_start_blocker ? 'start-blocker' : undefined}
+            onclick={() => begin(order)}
+            >{starting ? 'Starting work…' : 'Start work'} <Icon name="arrow" /></button
+          >
+        {:else}
+          <p class="field-hint">
+            Waiting for the provider to start work{order.start_deadline
+              ? ` by ${formatMoment(order.start_deadline)}`
+              : ''}. If they do not, the order is canceled and Mono releases the held funds.
+          </p>
+        {/if}
+      {:else if order.status === 'in_progress' && order.work_started_at}
+        <h2 class="account-title">Work</h2>
+        <p class="field-hint" role="status">
+          Work started on {formatMoment(order.work_started_at)}. Mono charged the payment.
+        </p>
+      {:else if order.status === 'canceled' && order.cancel_reason === 'start_timeout'}
+        <h2 class="account-title">Canceled</h2>
+        <p class="field-hint" role="status">
+          Canceled{order.canceled_at ? ` on ${formatMoment(order.canceled_at)}` : ''}: the provider
+          did not start work in time. Mono released the held funds to the customer.
+        </p>
       {/if}
 
       <h2 class="account-title">Work stages</h2>

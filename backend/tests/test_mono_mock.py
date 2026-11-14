@@ -97,21 +97,18 @@ async def test_finalize_and_cancel_follow_the_hold(client, browser):
     finalized, canceled = await hold_invoice(client), await hold_invoice(client)
     for invoice_id in (finalized, canceled):
         await browser.post(f"/pay/{invoice_id}", content="action=pay&card=4242424242424242")
-    headers = {"X-Token": "mono-mock"}
 
-    done = await browser.post(
-        "/api/merchant/invoice/finalize",
-        json={"invoiceId": finalized, "amount": 150000},
-        headers=headers,
-    )
-    reversed_ = await browser.post(
-        "/api/merchant/invoice/cancel", json={"invoiceId": canceled}, headers=headers
-    )
+    done = await client.finalize_hold(finalized, Decimal("1500.00"))
+    reversed_ = await client.cancel_invoice(canceled)
 
-    assert done.json() == {"status": "success"}
-    assert (await client.invoice_status(finalized))["status"] == "success"
-    assert reversed_.json()["status"] == "success"
+    assert done == {"status": "success"}
+    finalized_status = await client.invoice_status(finalized)
+    assert finalized_status["status"] == "success"
+    assert finalized_status["finalAmount"] == 150000
+    assert reversed_["status"] == "success"
     assert (await client.invoice_status(canceled))["status"] == "reversed"
+    with pytest.raises(MonoError):
+        await client.finalize_hold(canceled, Decimal("1500.00"))
 
 
 async def test_requests_without_a_token_are_refused(mock):
