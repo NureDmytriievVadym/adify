@@ -10,9 +10,32 @@ from adify_api.core.config import get_settings
 from adify_api.listings.models import ListingCategory, ListingType
 from adify_api.listings.schemas import Amount, OwnerResponse, Spec
 from adify_api.orders.creatives import work_start_blocker
-from adify_api.orders.models import Order, OrderStatus
+from adify_api.orders.models import ChangeRequestStatus, Order, OrderStatus
 
 Details = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+ChangeMessage = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+]
+
+
+class ChangeRequestCreate(BaseModel):
+    """FR-042: what the customer wants changed in the submitted work."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    message: ChangeMessage
+
+
+class ChangeRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    message: str
+    status: ChangeRequestStatus
+    created_at: datetime
+    answered_at: datetime | None
+
+
 StageTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
 
@@ -106,6 +129,10 @@ class OrderResponse(BaseModel):
     work_start_blocker: str | None
     canceled_at: datetime | None
     cancel_reason: str | None
+    # FR-040–FR-044: the latest submission, acceptance, and every change request, oldest first.
+    review_started_at: datetime | None
+    completed_at: datetime | None
+    change_requests: list[ChangeRequestResponse]
 
     @classmethod
     def for_viewer(cls, order: Order, viewer: Account) -> "OrderResponse":
@@ -138,4 +165,9 @@ class OrderResponse(BaseModel):
             ),
             canceled_at=order.canceled_at,
             cancel_reason=order.cancel_reason,
+            review_started_at=order.review_started_at,
+            completed_at=order.completed_at,
+            change_requests=[
+                ChangeRequestResponse.model_validate(r) for r in order.change_requests
+            ],
         )

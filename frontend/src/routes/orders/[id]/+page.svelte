@@ -1,6 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import ConfirmDialog, { type Confirmation } from '#lib/components/ConfirmDialog.svelte';
   import Icon from '#lib/components/Icon.svelte';
+  import OrderReview from '#lib/components/OrderReview.svelte';
   import { session } from '#lib/accounts/session.svelte.ts';
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
@@ -22,6 +24,7 @@
   let paying = $state(false);
   let starting = $state(false);
   let startError: string | null = $state(null);
+  let confirmation: Confirmation | null = $state(null);
 
   // What the customer sees after Mono sends them back to the order.
   function returnNote(payment: Payment): string | null {
@@ -60,6 +63,16 @@
     starting = false;
     if (started.ok) result = started;
     else startError = started.message;
+  }
+
+  // Starting work charges the customer's card, so it is confirmed first.
+  function confirmStart(order: Order) {
+    confirmation = {
+      title: 'Start work on this order?',
+      message: `Mono will charge the held ${formatUah(Number(order.price_uah))}. You confirm that you received and understood the requirements; this cannot be undone.`,
+      confirmLabel: 'Start work',
+      run: () => begin(order),
+    };
   }
 
   // FR-036: the listing owner may be either party, so the page marks who is who.
@@ -191,7 +204,7 @@
             class="button button-dark"
             disabled={starting || Boolean(order.work_start_blocker)}
             aria-describedby={order.work_start_blocker ? 'start-blocker' : undefined}
-            onclick={() => begin(order)}
+            onclick={() => confirmStart(order)}
             >{starting ? 'Starting work…' : 'Start work'} <Icon name="arrow" /></button
           >
         {:else}
@@ -201,11 +214,14 @@
               : ''}. If they do not, the order is canceled and Mono releases the held funds.
           </p>
         {/if}
-      {:else if order.status === 'in_progress' && order.work_started_at}
+      {:else if ['in_progress', 'in_review', 'done'].includes(order.status)}
         <h2 class="account-title">Work</h2>
-        <p class="field-hint" role="status">
-          Work started on {formatMoment(order.work_started_at)}. Mono charged the payment.
-        </p>
+        {#if order.work_started_at}
+          <p class="field-hint">
+            Work started on {formatMoment(order.work_started_at)}. Mono charged the payment.
+          </p>
+        {/if}
+        <OrderReview {order} onchange={(next) => (result = { ok: true, value: next })} />
       {:else if order.status === 'canceled' && order.cancel_reason === 'start_timeout'}
         <h2 class="account-title">Canceled</h2>
         <p class="field-hint" role="status">
@@ -251,3 +267,5 @@
     </section>
   {/if}
 </div>
+
+<ConfirmDialog {confirmation} onclose={() => (confirmation = null)} />

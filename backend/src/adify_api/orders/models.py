@@ -30,6 +30,16 @@ class CancelReason(StrEnum):
     START_TIMEOUT = "start_timeout"
 
 
+class ChangeRequestStatus(StrEnum):
+    """FR-042–FR-044: a customer's request for changes and the provider's answer."""
+
+    PENDING = "pending"
+    AGREED = "agreed"
+    DECLINED = "declined"
+    # The customer accepted the work before the provider answered.
+    WITHDRAWN = "withdrawn"
+
+
 # FR-017: an order is active in any state other than canceled, rejected, or done.
 ACTIVE_ORDER_STATUSES = frozenset(OrderStatus) - {
     OrderStatus.DONE,
@@ -69,12 +79,22 @@ class Order(Base):
     work_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_reason: Mapped[str | None] = mapped_column(String(40))
+    # FR-040: when the work was last submitted; the review auto-completion (ADY-027) counts
+    # from it, so it is cleared when the provider agrees to make changes.
+    review_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # FR-043: when the customer accepted the work.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     listing: Mapped[Listing] = relationship(lazy="selectin")
     customer: Mapped[Account] = relationship(foreign_keys=[customer_id], lazy="selectin")
     provider: Mapped[Account] = relationship(foreign_keys=[provider_id], lazy="selectin")
     stages: Mapped[list["OrderStage"]] = relationship(
         lazy="selectin", order_by="OrderStage.position", cascade="all, delete-orphan"
+    )
+    change_requests: Mapped[list["ChangeRequest"]] = relationship(
+        lazy="selectin",
+        order_by="ChangeRequest.created_at",
+        cascade="all, delete-orphan",
     )
 
 
@@ -90,3 +110,22 @@ class OrderStage(Base):
     position: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(120))
     deadline: Mapped[date | None] = mapped_column(Date)
+
+
+class ChangeRequest(Base):
+    """FR-042–FR-044: the customer asks for changes to submitted work; the provider agrees
+    (the order goes back in progress) or declines (it stays in review). The parties agree
+    how many rounds there are; the system keeps every request as history."""
+
+    __tablename__ = "order_change_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), index=True
+    )
+    message: Mapped[str] = mapped_column(Text)
+    status: Mapped[ChangeRequestStatus] = mapped_column(
+        _enum(ChangeRequestStatus, "change_request_status"), default=ChangeRequestStatus.PENDING
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

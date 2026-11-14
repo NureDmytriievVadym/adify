@@ -46,6 +46,18 @@ export interface Order {
   work_start_blocker: string | null;
   canceled_at: string | null;
   cancel_reason: 'start_timeout' | null;
+  // FR-040–FR-044: the latest submission, acceptance, and change requests, oldest first.
+  review_started_at: string | null;
+  completed_at: string | null;
+  change_requests: ChangeRequest[];
+}
+
+export interface ChangeRequest {
+  id: string;
+  message: string;
+  status: 'pending' | 'agreed' | 'declined' | 'withdrawn';
+  created_at: string;
+  answered_at: string | null;
 }
 
 // Mono invoice statuses as the API reports them (FR-038).
@@ -121,6 +133,17 @@ export const startPayment = (orderId: string) => request<Payment>(`/orders/${ord
 export const fetchPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`);
 // FR-039: the provider starts a paid order; Mono charges the held funds.
 export const startWork = (orderId: string) => request<Order>(`/orders/${orderId}/start`, {});
+
+// FR-040–FR-044: review of the submitted work.
+export const submitForReview = (orderId: string) => request<Order>(`/orders/${orderId}/review`, {});
+export const acceptWork = (orderId: string) => request<Order>(`/orders/${orderId}/accept`, {});
+export const requestChanges = (orderId: string, message: string) =>
+  request<Order>(`/orders/${orderId}/change-requests`, { message: message.trim() });
+export const answerChangeRequest = (orderId: string, requestId: string, agree: boolean) =>
+  request<Order>(
+    `/orders/${orderId}/change-requests/${requestId}/${agree ? 'agree' : 'decline'}`,
+    {},
+  );
 
 // Times such as the start deadline are shown in the viewer's own zone.
 export const formatMoment = (moment: string) =>
