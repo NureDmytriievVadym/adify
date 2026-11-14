@@ -3,6 +3,7 @@
   import { categories, categoryName } from '#lib/listings/catalog.ts';
   import {
     MAX_SPECS,
+    kyivToday,
     type FieldErrors,
     type ListingField,
     type ListingInput,
@@ -15,12 +16,15 @@
     errors,
     type,
     categoryLocked = false,
+    expiryLocked = false,
   }: {
     input: ListingInput;
     errors: FieldErrors;
     type: ListingType;
     /** FR-017: an active order fixes the category; the select stays visible but disabled. */
     categoryLocked?: boolean;
+    /** FR-019: an expired listing cannot be revived by moving its expiry date. */
+    expiryLocked?: boolean;
   } = $props();
 
   const isRequest = $derived(type === 'request');
@@ -117,6 +121,28 @@
   />
   {#if errors.delivery_days}
     <p class="field-error" id="delivery_days-error">{errors.delivery_days}</p>
+  {/if}
+</div>
+
+<div class="form-field">
+  <label for="expiry_date">Expiry date</label>
+  <input
+    id="expiry_date"
+    name="expiry_date"
+    type="date"
+    min={kyivToday()}
+    bind:value={input.expiryDate}
+    disabled={expiryLocked}
+    aria-invalid={errors.expiry_date ? 'true' : undefined}
+    aria-describedby={describedBy('expiry_date', 'expiry-date-hint')}
+  />
+  <p class="field-hint" id="expiry-date-hint">
+    {expiryLocked
+      ? 'This listing has expired. An expired listing cannot be extended; publish a new one instead.'
+      : 'The listing leaves the marketplace at 23:59 Kyiv time on this date.'}
+  </p>
+  {#if errors.expiry_date}
+    <p class="field-error" id="expiry_date-error">{errors.expiry_date}</p>
   {/if}
 </div>
 

@@ -20,6 +20,7 @@ OFFER = {
     "description": "A display banner placement on an independent design journal.",
     "price_uah": "3500.00",
     "delivery_days": 5,
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [{"label": "Dimensions", "value": "728 x 90 px"}],
 }
 ORDER = {"details": "Homepage banner for two weeks.", "price_uah": "3000", "stages": []}

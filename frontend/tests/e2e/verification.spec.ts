@@ -19,7 +19,8 @@ const offer = {
   attachments: [],
   created_at: '2026-10-30T12:00:00Z',
   status: 'active',
-  expires_at: '2026-11-29T12:00:00Z',
+  expiry_date: '2026-11-29',
+  expires_at: '2026-11-29T21:59:00Z',
 };
 
 const chat = {

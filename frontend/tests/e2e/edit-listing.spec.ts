@@ -52,7 +52,8 @@ async function mockApi(page: Page, options: MockOptions = {}) {
     ],
     created_at: '2026-11-01T10:00:00Z',
     status: 'active',
-    expires_at: '2026-12-01T10:00:00Z',
+    expiry_date: '2026-12-01',
+    expires_at: '2026-12-01T21:59:00Z',
   };
   const api = {
     patches: [] as Record<string, unknown>[],
