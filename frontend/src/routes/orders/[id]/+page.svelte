@@ -3,7 +3,9 @@
   import ConfirmDialog, { type Confirmation } from '#lib/components/ConfirmDialog.svelte';
   import Icon from '#lib/components/Icon.svelte';
   import OrderEnd from '#lib/components/OrderEnd.svelte';
+  import OrderEvidence from '#lib/components/OrderEvidence.svelte';
   import OrderReview from '#lib/components/OrderReview.svelte';
+  import OrderStages from '#lib/components/OrderStages.svelte';
   import { session } from '#lib/accounts/session.svelte.ts';
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
@@ -227,19 +229,9 @@
 
       <OrderEnd {order} onchange={(next) => (result = { ok: true, value: next })} />
 
-      <h2 class="account-title">Work stages</h2>
-      {#if order.stages.length === 0}
-        <p class="field-hint">No separate stages.</p>
-      {:else}
-        <ol class="order-stage-list">
-          {#each order.stages as stage, index (index)}
-            <li>
-              <strong>{stage.title}</strong>
-              <span>{stage.deadline ? `Due ${formatDay(stage.deadline)}` : 'No deadline'}</span>
-            </li>
-          {/each}
-        </ol>
-      {/if}
+      <OrderStages {order} onchange={(next) => (result = { ok: true, value: next })} />
+
+      <OrderEvidence {order} onchange={(next) => (result = { ok: true, value: next })} />
 
       <h2 class="account-title">Technical requirements</h2>
       <p class="field-hint">

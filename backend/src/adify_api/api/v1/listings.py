@@ -11,9 +11,10 @@ from adify_api.accounts.schemas import ErrorResponse
 from adify_api.auth.dependencies import CurrentAccount, VerifiedAccount
 from adify_api.chats import service as chats_service
 from adify_api.chats.schemas import ChatResponse
+from adify_api.core import storage
 from adify_api.core.config import get_settings
 from adify_api.core.db import get_session
-from adify_api.listings import service, storage
+from adify_api.listings import service
 from adify_api.listings.models import Listing, ListingCategory, ListingType
 from adify_api.listings.schemas import (
     AttachmentResponse,
