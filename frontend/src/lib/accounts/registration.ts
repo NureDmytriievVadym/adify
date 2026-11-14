@@ -32,8 +32,7 @@ export const UKRAINIAN_PHONE_MASK = '+38 (0__)-___-__-__';
 
 export function formatPhoneInput(value: string): string {
   const digits = value.replace(/\D/g, '');
-  if (value.trimStart().startsWith('+') && !digits.startsWith('380'))
-    return UKRAINIAN_PHONE_MASK;
+  if (value.trimStart().startsWith('+') && !digits.startsWith('380')) return UKRAINIAN_PHONE_MASK;
 
   let nationalNumber = digits.startsWith('380') ? digits.slice(3) : digits;
   if (!nationalNumber && value.trimStart().startsWith('+')) return UKRAINIAN_PHONE_MASK;

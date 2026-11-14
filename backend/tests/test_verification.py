@@ -74,9 +74,7 @@ async def verify_both(client: AsyncClient, headers, outbox) -> None:
     assert response.status_code == 200
 
 
-async def test_registration_email_code_is_sent_only_when_requested(
-    client: AsyncClient, outbox
-):
+async def test_registration_email_code_is_sent_only_when_requested(client: AsyncClient, outbox):
     registration = await client.post(
         "/api/v1/accounts",
         json={
