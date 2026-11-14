@@ -1,13 +1,18 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import ConfirmDialog, { type Confirmation } from '#lib/components/ConfirmDialog.svelte';
   import Icon from '#lib/components/Icon.svelte';
+  import OrderEnd from '#lib/components/OrderEnd.svelte';
+  import OrderReview from '#lib/components/OrderReview.svelte';
   import { session } from '#lib/accounts/session.svelte.ts';
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
   import {
     fetchOrder,
     fetchPayment,
     formatDay,
+    formatMoment,
     startPayment,
+    startWork,
     statusLabel,
     type Order,
     type OrderResult,
@@ -18,6 +23,9 @@
   let paymentNote: string | null = $state(null);
   let paymentError: string | null = $state(null);
   let paying = $state(false);
+  let starting = $state(false);
+  let startError: string | null = $state(null);
+  let confirmation: Confirmation | null = $state(null);
 
   // What the customer sees after Mono sends them back to the order.
   function returnNote(payment: Payment): string | null {
@@ -48,6 +56,26 @@
     paymentError = started.ok ? 'The payment could not be started. Try again.' : started.message;
   }
 
+  // FR-039: starting work confirms the requirements; Mono then charges the held funds.
+  async function begin(order: Order) {
+    starting = true;
+    startError = null;
+    const started = await startWork(order.id);
+    starting = false;
+    if (started.ok) result = started;
+    else startError = started.message;
+  }
+
+  // Starting work charges the customer's card, so it is confirmed first.
+  function confirmStart(order: Order) {
+    confirmation = {
+      title: 'Start work on this order?',
+      message: `Mono will charge the held ${formatUah(Number(order.price_uah))}. You confirm that you received and understood the requirements; this cannot be undone.`,
+      confirmLabel: 'Start work',
+      run: () => begin(order),
+    };
+  }
+
   // FR-036: the listing owner may be either party, so the page marks who is who.
   function partyNote(order: Order, partyId: string) {
     const me = session.account?.id;
@@ -63,6 +91,7 @@
     result = null;
     paymentNote = null;
     paymentError = null;
+    startError = null;
     load(id, page.url.searchParams.get('payment') === 'return');
   });
 </script>
@@ -151,6 +180,53 @@
         {/if}
       {/if}
 
+      {#if order.status === 'paid'}
+        <h2 class="account-title">Start work</h2>
+        {#if order.provider.id === session.account?.id}
+          <p class="field-hint">
+            Starting work confirms that you received and understood the order requirements. Mono
+            then charges the held funds.
+          </p>
+          {#if order.start_deadline}
+            <p class="field-hint">
+              Start by {formatMoment(order.start_deadline)}. Otherwise the order is canceled and the
+              funds go back to the customer.
+            </p>
+          {/if}
+          {#if order.work_start_blocker}
+            <p class="form-alert" id="start-blocker">
+              {order.work_start_blocker}. The customer must attach a creative that passes validation
+              before work can start.
+            </p>
+          {/if}
+          {#if startError}<p class="form-alert" role="alert">{startError}</p>{/if}
+          <button
+            type="button"
+            class="button button-dark"
+            disabled={starting || Boolean(order.work_start_blocker)}
+            aria-describedby={order.work_start_blocker ? 'start-blocker' : undefined}
+            onclick={() => confirmStart(order)}
+            >{starting ? 'Starting work…' : 'Start work'} <Icon name="arrow" /></button
+          >
+        {:else}
+          <p class="field-hint">
+            Waiting for the provider to start work{order.start_deadline
+              ? ` by ${formatMoment(order.start_deadline)}`
+              : ''}. If they do not, the order is canceled and Mono releases the held funds.
+          </p>
+        {/if}
+      {:else if ['in_progress', 'in_review', 'done'].includes(order.status)}
+        <h2 class="account-title">Work</h2>
+        {#if order.work_started_at}
+          <p class="field-hint">
+            Work started on {formatMoment(order.work_started_at)}. Mono charged the payment.
+          </p>
+        {/if}
+        <OrderReview {order} onchange={(next) => (result = { ok: true, value: next })} />
+      {/if}
+
+      <OrderEnd {order} onchange={(next) => (result = { ok: true, value: next })} />
+
       <h2 class="account-title">Work stages</h2>
       {#if order.stages.length === 0}
         <p class="field-hint">No separate stages.</p>
@@ -188,3 +264,5 @@
     </section>
   {/if}
 </div>
+
+<ConfirmDialog {confirmation} onclose={() => (confirmation = null)} />

@@ -87,6 +87,26 @@ class MonoClient:
             body["webHookUrl"] = webhook_url
         return await self._request("POST", "/api/merchant/invoice/create", json=body)
 
+    async def finalize_hold(self, invoice_id: str, amount: Decimal) -> dict[str, Any]:
+        """FR-039: charge the held funds when the provider starts work."""
+        return await self._request(
+            "POST",
+            "/api/merchant/invoice/finalize",
+            json={"invoiceId": invoice_id, "amount": kopiyky(amount)},
+        )
+
+    async def cancel_invoice(self, invoice_id: str) -> dict[str, Any]:
+        """FR-132: release a hold (or refund a charge); Mono reports the invoice reversed."""
+        return await self._request(
+            "POST", "/api/merchant/invoice/cancel", json={"invoiceId": invoice_id}
+        )
+
+    async def remove_invoice(self, invoice_id: str) -> dict[str, Any]:
+        """FR-046, FR-047: invalidate an unpaid invoice so its payment page stops working."""
+        return await self._request(
+            "POST", "/api/merchant/invoice/remove", json={"invoiceId": invoice_id}
+        )
+
     async def invoice_status(self, invoice_id: str) -> dict[str, Any]:
         return await self._request(
             "GET", "/api/merchant/invoice/status", params={"invoiceId": invoice_id}

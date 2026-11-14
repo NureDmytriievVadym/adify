@@ -43,3 +43,8 @@ e2e *args:
 # Safe to re-run; `just seed --reset` recreates the demo rows.
 seed *args:
     docker compose exec -T -e ADIFY_ALLOW_SEED=true backend python -m adify_api.seed {{args}}
+
+# FR-132: cancel paid orders not started within 7 days and release their Mono holds.
+# A deployment schedules it daily with cron; `--now 2026-12-01` replays a later date.
+order-timeouts *args:
+    docker compose exec -T backend python -m adify_api.jobs {{args}}

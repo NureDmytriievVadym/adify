@@ -2,7 +2,7 @@
 
 Docker Compose runs it as ``mono-mock`` and points the backend at it, so no one needs a Mono
 token. It speaks the part of the acquiring API Adify uses: hold invoices, invoice status,
-finalize, cancel, and the public key. Its payment page has Pay and Decline buttons; the
+finalize, cancel, remove, and the public key. Its payment page has Pay and Decline buttons; the
 result is sent to the invoice's ``webHookUrl`` signed with ECDSA-SHA256, as Mono does.
 The signing key is generated on start, and invoices live in memory until a restart.
 """
@@ -143,6 +143,16 @@ def create_app(
             raise _error(400, "only a held or paid invoice can be canceled")
         await change(invoice, "reversed", finalAmount=0)
         return {"status": "success", "createdDate": _now(), "modifiedDate": invoice["modifiedDate"]}
+
+    @app.post("/api/merchant/invoice/remove")
+    async def remove(request: Request, x_token: str | None = Header(default=None)):
+        if not x_token:
+            raise _error(403, "forbidden")
+        invoice = invoice_for((await request.json()).get("invoiceId"))
+        if invoice["status"] != "created":
+            raise _error(400, "only an unpaid invoice can be removed")
+        await change(invoice, "expired")
+        return {}
 
     def page(invoice: dict[str, Any], error: str | None = None) -> HTMLResponse:
         uah = f"{invoice['amount'] / 100:,.2f}".replace(",", " ")
