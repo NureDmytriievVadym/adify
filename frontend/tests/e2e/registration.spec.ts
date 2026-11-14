@@ -139,12 +139,12 @@ test('explains invalid input before sending it', async ({ page }) => {
   await page.getByLabel('Password').fill('password');
   await page.getByRole('button', { name: 'Create account' }).click();
 
-  await expect(page.getByText('Choose exactly one role: customer or provider.')).toBeVisible();
+  await expect(page.getByText('Choose exactly one role: customer or provider')).toBeVisible();
   await expect(page.getByLabel('Phone number')).toHaveAccessibleDescription(
-    /Enter a Ukrainian phone number in the format \+380XXXXXXXXX\./,
+    /Enter the remaining 9 digits\./,
   );
   await expect(page.getByLabel('Password')).toHaveAccessibleDescription(
-    /Use at least 8 characters, including at least one letter and one digit\./,
+    /Use at least 8 characters, including at least one letter and one digit/,
   );
   await expect(page.getByRole('radio', { name: /Customer/ })).toBeFocused();
   expect(requests).toEqual([]);
