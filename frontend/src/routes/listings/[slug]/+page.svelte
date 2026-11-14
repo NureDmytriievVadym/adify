@@ -7,8 +7,9 @@
   import {
     deleteListing,
     fetchListing,
-    formatDate,
+    formatDay,
     formatDelivery,
+    kyivToday,
     pauseListing,
     resumeListing,
     revealPhone,
@@ -45,7 +46,7 @@
     audience: ApiAudience | null;
     attachments: Attachment[];
     status: ListingStatus;
-    expiresAt: string | null;
+    expiryDate: string | null;
   }
 
   let live: FetchResult | null = $state(null);
@@ -86,7 +87,7 @@
         audience: null,
         attachments: [],
         status: 'active',
-        expiresAt: null,
+        expiryDate: null,
       };
     }
     if (!live?.ok) return null;
@@ -107,7 +108,7 @@
       audience: listing.audience,
       attachments: listing.attachments,
       status: listing.status,
-      expiresAt: listing.expires_at,
+      expiryDate: listing.expiry_date,
     };
   });
 
@@ -133,7 +134,7 @@
   // FR-018–FR-020: only an active listing takes new orders; FR-026 still allows chats.
   const closed = $derived(!!view && view.status !== 'active');
   const stateLabels = { paused: 'Paused', expired: 'Expired', soft_deleted: 'Deleted' };
-  const until = $derived(view?.expiresAt ? formatDate(view.expiresAt) : '');
+  const until = $derived(view?.expiryDate ? formatDay(view.expiryDate) : '');
 
   async function toggleState() {
     if (!view?.id) return;
@@ -339,7 +340,9 @@
                 ? `Active until ${until}. Pausing hides it from the marketplace and stops new orders; existing orders continue.`
                 : view.status === 'paused'
                   ? `Paused: hidden from the marketplace and not accepting new orders. You can resume it until ${until}.`
-                  : `Expired on ${until}. An expired listing cannot be resumed.`}
+                  : view.expiryDate && view.expiryDate <= kyivToday()
+                    ? `Expired on ${until}. An expired listing cannot be resumed.`
+                    : 'This listing expired and cannot be resumed.'}
             </p>
             <p class="small-note">This is your listing. Changes appear here as soon as you save.</p>
             <div class="delete-listing">

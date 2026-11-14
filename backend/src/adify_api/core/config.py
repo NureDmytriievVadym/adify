@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     max_attachment_bytes: int = 10 * 1024 * 1024
     max_attachments: int = 5
-    # FR-019: a listing stops taking orders this many days after it is published.
+    # The create form and demo data start with this many days; the owner chooses the
+    # actual FR-021 expiry date.
     listing_lifetime_days: int = 30
     # The demo-data CLI is opt-in so it cannot accidentally run against a shared database.
     allow_seed: bool = False

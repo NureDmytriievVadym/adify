@@ -28,7 +28,8 @@ async function mockApi(page: Page, options: MockOptions = {}) {
     attachments: [],
     created_at: '2026-11-01T10:00:00Z',
     status,
-    expires_at: '2026-12-01T10:00:00Z',
+    expiry_date: '2026-12-01',
+    expires_at: '2026-12-01T21:59:00Z',
   };
   const calls: string[] = [];
 

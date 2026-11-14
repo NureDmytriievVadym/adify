@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
@@ -15,6 +15,8 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from adify_api.accounts.models import AccountRole
+from adify_api.listings.expiry import expiry_date as selected_expiry_date
+from adify_api.listings.expiry import today_in_kyiv
 from adify_api.listings.models import (
     Listing,
     ListingAttachment,
@@ -90,8 +92,19 @@ class _ListingCreate(BaseModel):
     category: ListingCategory
     title: Title
     description: Description
+    # FR-021: the owner chooses the day; the listing ends at 23:59 Kyiv time.
+    expiry_date: date
     specs: Specs = []
     audience: Audience | None = None
+
+    @field_validator("expiry_date")
+    @classmethod
+    def not_in_the_past(cls, value: date) -> date:
+        if value < today_in_kyiv():
+            raise PydanticCustomError(
+                "expiry_date_passed", "Choose an expiry date that has not passed."
+            )
+        return value
 
 
 class RequestCreate(_ListingCreate):
@@ -117,6 +130,7 @@ class ListingUpdate(BaseModel):
     category: ListingCategory | None = None
     title: Title | None = None
     description: Description | None = None
+    expiry_date: date | None = None
     budget_uah: Amount | None = None
     price_uah: Amount | None = None
     delivery_days: DeliveryDays | None = None
@@ -124,7 +138,14 @@ class ListingUpdate(BaseModel):
     audience: Audience | None = None
 
     @field_validator(
-        "category", "title", "description", "budget_uah", "price_uah", "specs", mode="before"
+        "category",
+        "title",
+        "description",
+        "expiry_date",
+        "budget_uah",
+        "price_uah",
+        "specs",
+        mode="before",
     )
     @classmethod
     def required_when_sent(cls, value: Any) -> Any:
@@ -176,6 +197,8 @@ class ListingResponse(BaseModel):
     created_at: datetime
     # FR-018/FR-019: only an active listing takes new orders.
     status: ListingStatus
+    # FR-021: 23:59 Kyiv time on this owner-selected date.
+    expiry_date: date
     expires_at: datetime
 
     @classmethod
@@ -198,6 +221,7 @@ class ListingResponse(BaseModel):
             attachments=[AttachmentResponse.from_model(item) for item in listing.attachments],
             created_at=listing.created_at,
             status=listing.status,
+            expiry_date=selected_expiry_date(listing.expires_at),
             expires_at=listing.expires_at,
             **extra,
         )

@@ -12,19 +12,22 @@ Primary requirements: **FR-018** (the owner pauses and resumes a listing) and
 
 ## Listing status
 
-Every listing has a status derived from two columns added by migration `0007`:
+Every listing has a status derived from the columns added by migrations `0007` and
+`0015`:
 
-| Status    | Condition                      | Marketplace and search | New orders |
-| --------- | ------------------------------ | ---------------------- | ---------- |
-| `active`  | Not paused and not expired     | Listed                 | Accepted   |
-| `paused`  | `paused_at` is set             | Hidden                 | Refused    |
-| `expired` | `expires_at` has passed (wins) | Hidden                 | Refused    |
+| Status    | Condition                                              | Marketplace and search | New orders |
+| --------- | ------------------------------------------------------ | ---------------------- | ---------- |
+| `active`  | Not paused and not expired                             | Listed                 | Accepted   |
+| `paused`  | `paused_at` is set                                     | Hidden                 | Refused    |
+| `expired` | `expires_at` has passed, or `expired_at` is set (wins) | Hidden                 | Refused    |
 
-A listing expires **30 days** after it is published (`ADIFY_LISTING_LIFETIME_DAYS`,
-default `30`). Migration `0007` sets `expires_at = created_at + 30 days` for existing
-listings. Pausing does not stop the clock. Paused and expired listings stay reachable
-by their link, where they are clearly marked, and their owner still sees them in
-**My listings**. A paused or expired listing can still be edited.
+A listing expires at **23:59 Kyiv time on the date its owner selected** (FR-021),
+or earlier when the owner has not signed in for three months (FR-022, see
+[story #15](story-015.md)). The former 30-day automatic lifetime remains only as
+the create form's default suggestion. Pausing does not stop the clock. Paused and
+expired listings stay reachable by their link, where they are clearly marked, and
+their owner still sees them in **My listings**. A paused or expired listing can
+still be edited, but an expired listing cannot be extended (FR-019).
 
 ## New orders
 
@@ -89,19 +92,16 @@ it (FR-008).
 
 ## Open TBDs
 
-- The SRS lifetime of a listing (30 days is the interim default) and whether an owner
-  can renew an expired listing.
-- Whether a pause should stop the expiry clock.
+- Whether an owner can renew an expired listing (currently no; FR-019).
+- Whether a pause should stop the expiry clock (currently no).
 - Notifying the other party of an existing order when a listing is paused.
-- Expiry is computed when a listing is read; a scheduled job is not needed until
-  expiry must trigger notifications.
 
 ## Automated acceptance
 
-- `backend/tests/test_listings.py` (FR-018/FR-019 section): the configured lifetime,
-  pause and resume with marketplace visibility and the chat guard, repeated pause and
-  resume, editing while paused, expired listings refusing resume, pause, and chats,
-  and who may pause or resume.
+- `backend/tests/test_listings.py` (FR-018/FR-019 section): the owner-selected expiry
+  instant, pause and resume with marketplace visibility and the chat guard, repeated
+  pause and resume, editing while paused, expired listings refusing resume, pause, and
+  chats, and who may pause or resume.
 - `backend/tests/test_seed.py`: one expired demo listing, all others active.
 - `frontend/tests/e2e/listing-state.spec.ts`: pausing and resuming from the listing
   page, the disabled chat for other users and guests, an active listing still taking

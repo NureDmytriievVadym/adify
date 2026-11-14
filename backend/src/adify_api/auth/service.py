@@ -67,6 +67,8 @@ async def sign_in(session: AsyncSession, email: str, password: str) -> tuple[Acc
         raise INVALID_CREDENTIALS
     # Status is revealed only to someone who knows the password.
     ensure_active(account)
+    # FR-022: the inactivity clock starts at a successful sign-in, not at a token refresh.
+    account.last_login_at = datetime.now(UTC)
     return account, await _issue_refresh_token(session, account)
 
 
