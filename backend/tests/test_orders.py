@@ -101,8 +101,20 @@ async def test_owner_creates_an_order_awaiting_payment(client: AsyncClient, prov
     assert order["price_uah"] == "3000.00"
     assert order["deadline"] == days(20)
     assert order["stages"] == [
-        {"title": "Banner goes live", "deadline": days(5)},
-        {"title": "Placement report", "deadline": days(19)},
+        {
+            "id": order["stages"][0]["id"],
+            "title": "Banner goes live",
+            "deadline": days(5),
+            "completed_at": None,
+            "completed_by": None,
+        },
+        {
+            "id": order["stages"][1]["id"],
+            "title": "Placement report",
+            "deadline": days(19),
+            "completed_at": None,
+            "completed_by": None,
+        },
     ]
     assert order["is_listing_owner"] is True
     assert order["customer"]["role"] == "customer"

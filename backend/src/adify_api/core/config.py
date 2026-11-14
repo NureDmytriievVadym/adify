@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     # The create form and demo data start with this many days; the owner chooses the
     # actual FR-021 expiry date.
     listing_lifetime_days: int = 30
+    # FR-041: evidence limits are TBD in the SRS; these are the interim rules.
+    max_evidence_files: int = 5
+    max_evidence_bytes: int = 10 * 1024 * 1024
+    # FR-041, NFR-SEC-004: ClamAV INSTREAM scanner. An empty host uses the built-in
+    # EICAR signature check; a configured but unreachable scanner rejects the upload.
+    clamav_host: str = ""
+    clamav_port: int = 3310
+    clamav_timeout_seconds: float = 15.0
     # The demo-data CLI is opt-in so it cannot accidentally run against a shared database.
     allow_seed: bool = False
     # Mail goes to a local Mailpit by default; Gmail is smtp.gmail.com:587 with STARTTLS

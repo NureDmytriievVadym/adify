@@ -1,4 +1,3 @@
-import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -7,8 +6,8 @@ from sqlalchemy import String, cast, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import Account
+from adify_api.core import storage
 from adify_api.core.config import get_settings
-from adify_api.listings import storage
 from adify_api.listings.expiry import expiry_date as selected_expiry_date
 from adify_api.listings.expiry import expiry_moment
 from adify_api.listings.models import (
@@ -27,7 +26,6 @@ from adify_api.listings.schemas import (
 )
 from adify_api.orders.models import ACTIVE_ORDER_STATUSES, Order
 
-CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 LIKE_ESCAPE = "\\"
 
 
@@ -368,11 +366,6 @@ def ensure_owner(listing: Listing, account: Account) -> None:
         raise ListingError(403, "not_listing_owner", "Only the owner can change this listing.")
 
 
-def clean_filename(filename: str) -> str:
-    name = CONTROL_CHARACTERS.sub("", filename.replace("\\", "/").rsplit("/", 1)[-1]).strip()
-    return name[-255:] or "attachment"
-
-
 async def add_attachment(
     session: AsyncSession, listing: Listing, filename: str, data: bytes
 ) -> ListingAttachment:
@@ -396,7 +389,7 @@ async def add_attachment(
     attachment = ListingAttachment(
         id=uuid.uuid4(),
         listing_id=listing.id,
-        filename=clean_filename(filename),
+        filename=storage.clean_filename(filename),
         content_type=content_type,
         size=len(data),
     )

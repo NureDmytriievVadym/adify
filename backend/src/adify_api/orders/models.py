@@ -95,6 +95,11 @@ class Order(Base):
     stages: Mapped[list["OrderStage"]] = relationship(
         lazy="selectin", order_by="OrderStage.position", cascade="all, delete-orphan"
     )
+    evidence: Mapped[list["OrderEvidence"]] = relationship(
+        lazy="selectin",
+        order_by="OrderEvidence.created_at",
+        cascade="all, delete-orphan",
+    )
     change_requests: Mapped[list["ChangeRequest"]] = relationship(
         lazy="selectin",
         order_by="ChangeRequest.created_at",
@@ -114,6 +119,47 @@ class OrderStage(Base):
     position: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(120))
     deadline: Mapped[date | None] = mapped_column(Date)
+    # FR-037: either participant can mark a stage done while work is in progress or review.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("accounts.id"))
+    completed_by: Mapped[Account | None] = relationship(lazy="selectin")
+
+
+class OrderEvidence(Base):
+    """FR-041: text, files, or both submitted by an order participant as evidence."""
+
+    __tablename__ = "order_evidence"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), index=True
+    )
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("accounts.id"), index=True)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    author: Mapped[Account] = relationship(lazy="selectin")
+    files: Mapped[list["OrderEvidenceFile"]] = relationship(
+        lazy="selectin", order_by="OrderEvidenceFile.created_at", cascade="all, delete-orphan"
+    )
+
+
+class OrderEvidenceFile(Base):
+    """One file in an evidence submission; bytes live in the shared storage under ``id``."""
+
+    __tablename__ = "order_evidence_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    evidence_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("order_evidence.id", ondelete="CASCADE"), index=True
+    )
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(100))
+    size: Mapped[int] = mapped_column(Integer)
+    checksum: Mapped[str] = mapped_column(String(64))
+    # NFR-SEC-004: set after the malware scan; a rejected file never reaches this table.
+    scan_result: Mapped[str] = mapped_column(String(20), default="clean")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ChangeRequest(Base):

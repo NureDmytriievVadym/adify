@@ -88,6 +88,7 @@ async function mockApi(page: Page, { viewer, status = 'awaiting_payment', paymen
           price_uah: '3000.00',
           deadline: null,
           stages: [],
+          evidence: [],
           requirements: {
             listing_type: 'offer',
             category: 'website-banners',

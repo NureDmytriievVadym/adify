@@ -24,6 +24,7 @@ async function mockApi(page: Page, { viewer, status = 'paid', blocker, startFail
     price_uah: '3000.00',
     deadline: null,
     stages: [],
+    evidence: [],
     requirements: {
       listing_type: 'offer',
       category: 'website-banners',

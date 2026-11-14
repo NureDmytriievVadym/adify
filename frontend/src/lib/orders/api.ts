@@ -18,13 +18,39 @@ interface Party {
   role: 'customer' | 'provider';
 }
 
+export interface Stage {
+  id: string;
+  title: string;
+  deadline: string | null;
+  completed_at: string | null;
+  completed_by: Party | null;
+}
+
+export interface EvidenceFile {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  url: string;
+  created_at: string;
+}
+
+export interface Evidence {
+  id: string;
+  author: Party;
+  note: string | null;
+  files: EvidenceFile[];
+  created_at: string;
+}
+
 export interface Order {
   id: string;
   status: OrderStatus;
   details: string;
   price_uah: string;
   deadline: string | null;
-  stages: { title: string; deadline: string | null }[];
+  stages: Stage[];
+  evidence: Evidence[];
   requirements: {
     listing_type: ListingType;
     category: string;
@@ -103,15 +129,16 @@ export const formatDay = (day: string) =>
     new Date(`${day}T00:00:00`),
   );
 
-async function request<T>(path: string, body?: object): Promise<OrderResult<T>> {
+async function request<T>(path: string, body?: object | FormData): Promise<OrderResult<T>> {
+  const isForm = body instanceof FormData;
   try {
     const response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1${path}`, {
       method: body ? 'POST' : 'GET',
       headers: {
         Authorization: `Bearer ${session.accessToken}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: isForm ? body : body ? JSON.stringify(body) : undefined,
     });
     if (response.ok) return { ok: true, value: (await response.json()) as T };
     const data = (await response.json().catch(() => null)) as {
@@ -148,6 +175,44 @@ export const answerChangeRequest = (orderId: string, requestId: string, agree: b
     `/orders/${orderId}/change-requests/${requestId}/${agree ? 'agree' : 'decline'}`,
     {},
   );
+
+// FR-037: either participant can add stages and mark them complete while work is active.
+export const addStage = (orderId: string, title: string, deadline: string) =>
+  request<Order>(`/orders/${orderId}/stages`, {
+    title: title.trim(),
+    deadline: deadline || null,
+  });
+export const completeStage = (orderId: string, stageId: string) =>
+  request<Order>(`/orders/${orderId}/stages/${stageId}/complete`, {});
+export const reopenStage = (orderId: string, stageId: string) =>
+  request<Order>(`/orders/${orderId}/stages/${stageId}/reopen`, {});
+
+// FR-041: text, files, or both as one evidence submission.
+export function addEvidence(orderId: string, note: string, files: File[]) {
+  const form = new FormData();
+  if (note.trim()) form.set('note', note.trim());
+  for (const file of files) form.append('files', file);
+  return request<Order>(`/orders/${orderId}/evidence`, form);
+}
+
+/** Evidence files require the bearer token, so a plain anchor cannot open them. */
+export async function downloadEvidenceFile(file: EvidenceFile): Promise<OrderResult<null>> {
+  try {
+    const response = await fetch(`${PUBLIC_API_BASE_URL}${file.url}`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    });
+    if (!response.ok) return { ok: false, message: 'The evidence file could not be downloaded.' };
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = file.filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    return { ok: true, value: null };
+  } catch {
+    return { ok: false, message: 'Adify is unreachable. Try again in a moment.' };
+  }
+}
 
 // Times such as the start deadline are shown in the viewer's own zone.
 export const formatMoment = (moment: string) =>

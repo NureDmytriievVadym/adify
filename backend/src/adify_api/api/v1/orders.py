@@ -2,7 +2,8 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import Account
@@ -11,10 +12,12 @@ from adify_api.api.v1.chats import http_error as chat_http_error
 from adify_api.auth.dependencies import CurrentAccount, VerifiedAccount
 from adify_api.chats import service as chats
 from adify_api.chats.service import ChatError
+from adify_api.core import storage
+from adify_api.core.config import get_settings
 from adify_api.core.db import get_session
-from adify_api.orders import review, service, workflow
+from adify_api.orders import review, service, work, workflow
 from adify_api.orders.models import Order
-from adify_api.orders.schemas import ChangeRequestCreate, OrderCreate, OrderResponse
+from adify_api.orders.schemas import ChangeRequestCreate, OrderCreate, OrderResponse, StageInput
 from adify_api.orders.service import OrderError
 from adify_api.payments.mono import MonoClient, get_mono
 
@@ -244,4 +247,140 @@ async def reject_order(
     """FR-047: the provider rejects before work starts; Mono releases any held funds."""
     return await _act(
         session, order_id, account, lambda o: workflow.reject_order(session, o, account, mono)
+    )
+
+
+WORK_ERRORS = REVIEW_ERRORS | {
+    status.HTTP_413_CONTENT_TOO_LARGE: {
+        "model": ErrorResponse,
+        "description": "An evidence file is larger than the limit",
+    },
+    status.HTTP_503_SERVICE_UNAVAILABLE: {
+        "model": ErrorResponse,
+        "description": "The malware scanner is unavailable",
+    },
+}
+
+
+@router.post(
+    "/orders/{order_id}/stages",
+    status_code=status.HTTP_201_CREATED,
+    response_model=OrderResponse,
+    responses=WORK_ERRORS,
+)
+async def add_stage(
+    order_id: uuid.UUID, data: StageInput, account: VerifiedAccount, session: SessionDep
+) -> OrderResponse:
+    """FR-037: either participant adds a work stage while the order is being worked."""
+    return await _act(
+        session, order_id, account, lambda order: work.add_stage(session, order, account, data)
+    )
+
+
+@router.post(
+    "/orders/{order_id}/stages/{stage_id}/complete",
+    response_model=OrderResponse,
+    responses=WORK_ERRORS,
+)
+async def complete_stage(
+    order_id: uuid.UUID,
+    stage_id: uuid.UUID,
+    account: VerifiedAccount,
+    session: SessionDep,
+) -> OrderResponse:
+    """FR-037: either participant marks a work stage as done."""
+    return await _act(
+        session,
+        order_id,
+        account,
+        lambda order: work.complete_stage(session, order, account, stage_id),
+    )
+
+
+@router.post(
+    "/orders/{order_id}/stages/{stage_id}/reopen",
+    response_model=OrderResponse,
+    responses=WORK_ERRORS,
+)
+async def reopen_stage(
+    order_id: uuid.UUID,
+    stage_id: uuid.UUID,
+    account: VerifiedAccount,
+    session: SessionDep,
+) -> OrderResponse:
+    """FR-037: either participant reopens a completed work stage."""
+    return await _act(
+        session,
+        order_id,
+        account,
+        lambda order: work.reopen_stage(session, order, account, stage_id),
+    )
+
+
+@router.post(
+    "/orders/{order_id}/evidence",
+    status_code=status.HTTP_201_CREATED,
+    response_model=OrderResponse,
+    responses=WORK_ERRORS,
+)
+async def add_evidence(
+    order_id: uuid.UUID,
+    account: VerifiedAccount,
+    session: SessionDep,
+    note: Annotated[str | None, Form()] = None,
+    files: Annotated[list[UploadFile] | None, File()] = None,
+) -> OrderResponse:
+    """FR-041: submit a note, files, or both as evidence; every file is malware-scanned."""
+    settings = get_settings()
+    uploads = [
+        (
+            upload.filename or "evidence",
+            await upload.read(settings.max_evidence_bytes + 1),
+        )
+        for upload in files or []
+    ]
+    return await _act(
+        session,
+        order_id,
+        account,
+        lambda order: work.add_evidence(session, order, account, note, uploads),
+    )
+
+
+@router.get(
+    "/orders/{order_id}/evidence/{evidence_id}/files/{file_id}",
+    response_class=FileResponse,
+    responses=ERRORS,
+)
+async def download_evidence_file(
+    order_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    file_id: uuid.UUID,
+    account: CurrentAccount,
+    session: SessionDep,
+) -> FileResponse:
+    """An evidence file for the two order participants only."""
+    try:
+        order = await service.get_order(session, order_id, account)
+        attachment = work.evidence_file(order, evidence_id, file_id)
+    except OrderError as error:
+        raise http_error(error) from None
+    path = storage.path_of(attachment.id)
+    if not path.is_file():
+        raise http_error(
+            OrderError(404, "evidence_file_missing", "This file is no longer available.")
+        )
+    inline = attachment.content_type in {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+    }
+    return FileResponse(
+        path,
+        media_type=attachment.content_type,
+        filename=attachment.filename,
+        content_disposition_type="inline" if inline else "attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
