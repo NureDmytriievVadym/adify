@@ -28,6 +28,7 @@ class FakeMono:
         self.statuses: dict[str, dict] = {}
         self.finalized: list[tuple[str, Decimal]] = []
         self.canceled: list[str] = []
+        self.removed: list[str] = []
         self.down = False
 
     async def create_hold_invoice(self, **invoice) -> dict:
@@ -48,6 +49,12 @@ class FakeMono:
             raise MonoError("Mono answered 500")
         self.canceled.append(invoice_id)
         return {"status": "success"}
+
+    async def remove_invoice(self, invoice_id: str) -> dict:
+        if self.down:
+            raise MonoError("Mono answered 500")
+        self.removed.append(invoice_id)
+        return {}
 
     async def invoice_status(self, invoice_id: str) -> dict:
         if self.down:

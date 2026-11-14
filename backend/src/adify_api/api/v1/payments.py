@@ -11,6 +11,7 @@ from adify_api.api.v1.orders import http_error as order_http_error
 from adify_api.auth.dependencies import CurrentAccount, VerifiedAccount
 from adify_api.core.db import get_session
 from adify_api.orders import service as orders
+from adify_api.orders import workflow
 from adify_api.orders.service import OrderError
 from adify_api.payments import service
 from adify_api.payments.mono import MonoClient, MonoError, get_mono, verify_signature
@@ -74,6 +75,8 @@ async def get_payment(
     try:
         order = await orders.get_order(session, order_id, account)
         payment = await service.sync_payment(session, order, mono)
+        if mono is not None:
+            await workflow.release_stray_hold(session, payment, mono)
     except OrderError as error:
         raise order_http_error(error) from None
     except PaymentError as error:
@@ -118,6 +121,9 @@ async def mono_webhook(
         data = json.loads(body)
     except ValueError:
         raise _webhook_error(400, "invalid_body", "The webhook body is not JSON.") from None
-    if not isinstance(data, dict) or await service.apply_invoice_update(session, data) is None:
+    payment = await service.apply_invoice_update(session, data) if isinstance(data, dict) else None
+    if payment is None:
         logger.warning("Mono webhook for an unknown invoice was ignored")
+    else:
+        await workflow.release_stray_hold(session, payment, mono)
     return Response(status_code=status.HTTP_200_OK)

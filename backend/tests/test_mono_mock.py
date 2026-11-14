@@ -124,3 +124,17 @@ async def test_luhn_check():
     assert not luhn_valid("4111 1111 1111 1112")
     assert not luhn_valid("4111-1111-1111-1111")
     assert not luhn_valid("")
+
+
+async def test_a_removed_invoice_can_no_longer_be_paid(client, browser, webhooks):
+    """ADY-025/026: ending an order invalidates its unpaid invoice."""
+    invoice_id = await hold_invoice(client)
+
+    assert await client.remove_invoice(invoice_id) == {}
+    paid = await browser.post(f"/pay/{invoice_id}", content="action=pay&card=4111111111111111")
+
+    assert paid.status_code == 303
+    assert (await client.invoice_status(invoice_id))["status"] == "expired"
+    assert [w.headers["X-Sign"] != "" for w in webhooks] == [True]
+    with pytest.raises(MonoError):
+        await client.remove_invoice(invoice_id)

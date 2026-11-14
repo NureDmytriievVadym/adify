@@ -213,3 +213,35 @@ async def decline_changes(
         account,
         lambda o: review.answer_change_request(session, o, account, request_id, agree=False),
     )
+
+
+END_ERRORS = REVIEW_ERRORS | {
+    status.HTTP_502_BAD_GATEWAY: {"model": ErrorResponse, "description": "Mono failed"},
+    status.HTTP_503_SERVICE_UNAVAILABLE: {
+        "model": ErrorResponse,
+        "description": "Payments are not configured",
+    },
+}
+
+
+@router.post("/orders/{order_id}/cancel", response_model=OrderResponse, responses=END_ERRORS)
+async def cancel_order(
+    order_id: uuid.UUID, account: VerifiedAccount, session: SessionDep, mono: MonoDep
+) -> OrderResponse:
+    """FR-046: the customer cancels before work starts; Mono releases any held funds.
+
+    After Start work the order can only be disputed.
+    """
+    return await _act(
+        session, order_id, account, lambda o: workflow.cancel_order(session, o, account, mono)
+    )
+
+
+@router.post("/orders/{order_id}/reject", response_model=OrderResponse, responses=END_ERRORS)
+async def reject_order(
+    order_id: uuid.UUID, account: VerifiedAccount, session: SessionDep, mono: MonoDep
+) -> OrderResponse:
+    """FR-047: the provider rejects before work starts; Mono releases any held funds."""
+    return await _act(
+        session, order_id, account, lambda o: workflow.reject_order(session, o, account, mono)
+    )

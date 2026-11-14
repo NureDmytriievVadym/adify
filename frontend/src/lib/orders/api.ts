@@ -45,7 +45,7 @@ export interface Order {
   // FR-124: why Start work is unavailable, such as "No validated creative".
   work_start_blocker: string | null;
   canceled_at: string | null;
-  cancel_reason: 'start_timeout' | null;
+  cancel_reason: 'start_timeout' | 'customer_canceled' | 'provider_rejected' | null;
   // FR-040–FR-044: the latest submission, acceptance, and change requests, oldest first.
   review_started_at: string | null;
   completed_at: string | null;
@@ -133,6 +133,10 @@ export const startPayment = (orderId: string) => request<Payment>(`/orders/${ord
 export const fetchPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`);
 // FR-039: the provider starts a paid order; Mono charges the held funds.
 export const startWork = (orderId: string) => request<Order>(`/orders/${orderId}/start`, {});
+// FR-046, FR-047: before work starts the customer cancels or the provider rejects; Mono
+// releases any held funds.
+export const cancelOrder = (orderId: string) => request<Order>(`/orders/${orderId}/cancel`, {});
+export const rejectOrder = (orderId: string) => request<Order>(`/orders/${orderId}/reject`, {});
 
 // FR-040–FR-044: review of the submitted work.
 export const submitForReview = (orderId: string) => request<Order>(`/orders/${orderId}/review`, {});

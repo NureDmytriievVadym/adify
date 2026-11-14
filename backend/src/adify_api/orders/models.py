@@ -25,9 +25,13 @@ class OrderStatus(StrEnum):
 
 
 class CancelReason(StrEnum):
-    """Why an order was canceled; ADY-025 and ADY-026 add the participants' own reasons."""
+    """Why an order ended before work started (FR-046, FR-047, FR-132)."""
 
     START_TIMEOUT = "start_timeout"
+    # ADY-025: the customer canceled; the order is canceled.
+    CUSTOMER_CANCELED = "customer_canceled"
+    # ADY-026: the provider rejected; the order is rejected.
+    PROVIDER_REJECTED = "provider_rejected"
 
 
 class ChangeRequestStatus(StrEnum):

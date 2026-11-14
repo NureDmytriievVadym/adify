@@ -101,6 +101,12 @@ class MonoClient:
             "POST", "/api/merchant/invoice/cancel", json={"invoiceId": invoice_id}
         )
 
+    async def remove_invoice(self, invoice_id: str) -> dict[str, Any]:
+        """FR-046, FR-047: invalidate an unpaid invoice so its payment page stops working."""
+        return await self._request(
+            "POST", "/api/merchant/invoice/remove", json={"invoiceId": invoice_id}
+        )
+
     async def invoice_status(self, invoice_id: str) -> dict[str, Any]:
         return await self._request(
             "GET", "/api/merchant/invoice/status", params={"invoiceId": invoice_id}

@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import ConfirmDialog, { type Confirmation } from '#lib/components/ConfirmDialog.svelte';
   import Icon from '#lib/components/Icon.svelte';
+  import OrderEnd from '#lib/components/OrderEnd.svelte';
   import OrderReview from '#lib/components/OrderReview.svelte';
   import { session } from '#lib/accounts/session.svelte.ts';
   import { categoryName, formatUah } from '#lib/listings/catalog.ts';
@@ -222,13 +223,9 @@
           </p>
         {/if}
         <OrderReview {order} onchange={(next) => (result = { ok: true, value: next })} />
-      {:else if order.status === 'canceled' && order.cancel_reason === 'start_timeout'}
-        <h2 class="account-title">Canceled</h2>
-        <p class="field-hint" role="status">
-          Canceled{order.canceled_at ? ` on ${formatMoment(order.canceled_at)}` : ''}: the provider
-          did not start work in time. Mono released the held funds to the customer.
-        </p>
       {/if}
+
+      <OrderEnd {order} onchange={(next) => (result = { ok: true, value: next })} />
 
       <h2 class="account-title">Work stages</h2>
       {#if order.stages.length === 0}
