@@ -45,8 +45,6 @@ async def register(
     except RegistrationError as error:
         body = ErrorResponse(detail=error.errors)
         return JSONResponse(status_code=ERROR_STATUS[error.kind], content=body.model_dump())
-    code, _ = await verification.issue_code(session, account, VerificationChannel.EMAIL)
-    background.add_task(_deliver_welcome_code, account, code)
     return AccountResponse.model_validate(account)
 
 

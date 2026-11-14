@@ -5,6 +5,9 @@
   import { signIn } from '#lib/accounts/session.svelte.ts';
   import {
     registerAccount,
+    formatPhoneInput,
+    UKRAINIAN_PHONE_MASK,
+    UKRAINIAN_PHONE_PREFIX,
     validateRegistration,
     type Account,
     type FieldErrors,
@@ -29,7 +32,7 @@
   let input: RegistrationInput = $state({
     display_name: '',
     email: '',
-    phone: '',
+    phone: UKRAINIAN_PHONE_MASK,
     role: '',
     password: '',
   });
@@ -42,6 +45,64 @@
   const describedBy = (field: RegistrationField, hint = false) =>
     [hint && `${field}-hint`, errors[field] && `${field}-error`].filter(Boolean).join(' ') ||
     undefined;
+
+  function phoneDigitsBeforeCursor(value: string, cursor: number): number {
+    let digits = value.slice(0, cursor).replace(/\D/g, '');
+    if (digits.startsWith('380')) digits = digits.slice(3);
+    else if (value.trimStart().startsWith('+')) digits = '';
+    else if (digits.startsWith('0')) digits = digits.slice(1);
+    return digits.length;
+  }
+
+  function phoneCursorPosition(value: string, digitCount: number): number {
+    if (digitCount === 0) return UKRAINIAN_PHONE_PREFIX.length;
+    let seen = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      if (/\d/.test(value[index])) seen += 1;
+      if (seen === digitCount + 3) return index + 1;
+    }
+    return value.length;
+  }
+
+  function updatePhone(event: Event & { currentTarget: HTMLInputElement }) {
+    const field = event.currentTarget;
+    const digitsBeforeCursor = phoneDigitsBeforeCursor(
+      field.value,
+      field.selectionStart ?? field.value.length,
+    );
+    const formatted = formatPhoneInput(field.value);
+    input.phone = formatted;
+    field.value = formatted;
+    const cursor = phoneCursorPosition(formatted, digitsBeforeCursor);
+    field.setSelectionRange(cursor, cursor);
+  }
+
+  function keepPhonePrefix(event: KeyboardEvent & { currentTarget: HTMLInputElement }) {
+    const field = event.currentTarget;
+    const start = field.selectionStart ?? 0;
+    const end = field.selectionEnd ?? start;
+    const selectsAll = start === 0 && end === field.value.length;
+    if (selectsAll) return;
+
+    if (
+      (start < UKRAINIAN_PHONE_PREFIX.length && end > 0) ||
+      (start <= UKRAINIAN_PHONE_PREFIX.length &&
+        (event.key === 'Backspace' || event.key === 'Home' || event.key === 'ArrowLeft'))
+    ) {
+      event.preventDefault();
+      field.setSelectionRange(UKRAINIAN_PHONE_PREFIX.length, UKRAINIAN_PHONE_PREFIX.length);
+    }
+  }
+
+  function placePhoneCursorAfterPrefix(event: Event & { currentTarget: HTMLInputElement }) {
+    const field = event.currentTarget;
+    if (
+      field.value === UKRAINIAN_PHONE_MASK ||
+      (field.selectionStart ?? 0) < UKRAINIAN_PHONE_PREFIX.length
+    ) {
+      field.setSelectionRange(UKRAINIAN_PHONE_PREFIX.length, UKRAINIAN_PHONE_PREFIX.length);
+    }
+  }
 
   async function focusFirstError() {
     await tick();
@@ -158,12 +219,15 @@
           name="phone"
           type="tel"
           autocomplete="tel"
-          placeholder="+380671234567"
-          bind:value={input.phone}
+          value={input.phone}
+          onkeydown={keepPhonePrefix}
+          onfocus={placePhoneCursorAfterPrefix}
+          onclick={placePhoneCursorAfterPrefix}
+          oninput={updatePhone}
           aria-invalid={errors.phone ? 'true' : undefined}
           aria-describedby={describedBy('phone', true)}
         />
-        <p class="field-hint" id="phone-hint">A Ukrainian number starting with +380.</p>
+        <p class="field-hint" id="phone-hint">Enter the remaining 9 digits.</p>
         {#if errors.phone}<p class="field-error" id="phone-error">{errors.phone}</p>{/if}
       </div>
 
