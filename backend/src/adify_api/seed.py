@@ -1,4 +1,4 @@
-"""Development-only demo data: six accounts, thirteen listings, and one active order.
+"""Development-only demo data: six accounts, thirteen listings, and three orders.
 
 Run inside the backend container while the development stack is up:
 
@@ -12,6 +12,10 @@ script created (accounts with ``@demo.adify.app`` emails, their listings and ord
 The active order on Digital Daily's banner offering demonstrates FR-017: its owner can
 edit every detail except the category. Digital Daily's newsletter offering was paused
 and then expired, so it demonstrates that an expired listing cannot be resumed (FR-019).
+
+Two extra orders demonstrate the owner track-record filter (FR-085): Sofiia K. and
+Olena Marchenko each have a completed order and no current dispute, while Pocket
+Studio and Tetiana Shevchenko share a currently disputed order.
 """
 
 from __future__ import annotations
@@ -344,6 +348,9 @@ LISTINGS: tuple[DemoListing, ...] = (
 
 
 # Locks the category of "banners-journal" so the FR-017 edit rule can be demonstrated.
+# The extra done and disputed orders give the owner track-record filter (FR-085) data:
+# Sofiia K. has a completed order without current disputes, while Pocket Studio has
+# a currently disputed one.
 ORDERS: tuple[DemoOrder, ...] = (
     DemoOrder(
         "banners-journal-olena",
@@ -351,6 +358,20 @@ ORDERS: tuple[DemoOrder, ...] = (
         "olena",
         "digital-daily",
         OrderStatus.IN_PROGRESS,
+    ),
+    DemoOrder(
+        "social-everyday-olena",
+        "social-everyday",
+        "olena",
+        "sofiia",
+        OrderStatus.DONE,
+    ),
+    DemoOrder(
+        "stream-overlay-tetiana",
+        "stream-overlay",
+        "tetiana",
+        "pocket-studio",
+        OrderStatus.DISPUTED,
     ),
 )
 

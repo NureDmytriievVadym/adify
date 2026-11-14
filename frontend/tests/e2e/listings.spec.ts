@@ -81,6 +81,12 @@ async function mockApi(page: Page, role: Role | null) {
       const country = params.get('country')?.toLowerCase();
       const socioeconomic = params.get('socioeconomic')?.toLowerCase();
       const traits = params.getAll('traits').map((trait) => trait.toLowerCase());
+      const completedMin = params.has('owner_completed_min')
+        ? Number(params.get('owner_completed_min'))
+        : null;
+      const disputedMax = params.has('owner_disputed_max')
+        ? Number(params.get('owner_disputed_max'))
+        : null;
       const invalidRange =
         Number(params.get('price_min') ?? 0) > Number(params.get('price_max') ?? Infinity);
       if (invalidRange) {
@@ -113,6 +119,8 @@ async function mockApi(page: Page, role: Role | null) {
             socioeconomic: 'Middle income',
             traits: ['gamers'],
           },
+          owner_completed: 3,
+          owner_disputed: 0,
         }),
         listing('request', {
           id: REQUEST_ID,
@@ -122,6 +130,8 @@ async function mockApi(page: Page, role: Role | null) {
           price_uah: '8000.00',
           delivery_days: 20,
           audience: null,
+          owner_completed: 0,
+          owner_disputed: 2,
         }),
       ]
         .filter((item) => !type || item.type === type)
@@ -153,6 +163,8 @@ async function mockApi(page: Page, role: Role | null) {
           const itemTraits = Array.isArray(item.audience?.traits) ? item.audience.traits : [];
           return itemTraits.some((trait) => traits.includes(String(trait).toLowerCase()));
         })
+        .filter((item) => completedMin === null || (item.owner_completed ?? 0) >= completedMin)
+        .filter((item) => disputedMax === null || (item.owner_disputed ?? 0) <= disputedMax)
         .filter(
           (item) =>
             !term ||
@@ -202,6 +214,9 @@ type MockListing = {
     size: number;
     url: string;
   }[];
+  // Test-only owner track record (FR-085); the API filters on these counts but does not return them.
+  owner_completed?: number;
+  owner_disputed?: number;
 };
 
 const listing = (type: 'request' | 'offer', body: Record<string, unknown>): MockListing => ({
@@ -416,6 +431,36 @@ test('filters by target audience including traits', async ({ page }) => {
   await expect(page).toHaveURL(/country=Ukraine/);
   await expect(page).toHaveURL(/socioeconomic=middle/);
   await expect(page).toHaveURL(/traits=gamers/);
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
+});
+
+test('filters by the owner’s completed and currently disputed orders', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings');
+
+  await page.getByLabel('Completed orders (at least)').fill('1');
+  await page.getByLabel('Disputed orders (at most)').fill('0');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+
+  await expect(page).toHaveURL(/owner_completed_min=1/);
+  await expect(page).toHaveURL(/owner_disputed_max=0/);
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Owner: 1+ completed orders' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Owner: no disputed orders' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Owner: no disputed orders' }).click();
+  await expect(page).not.toHaveURL(/owner_disputed_max/);
+  await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
+});
+
+test('owner order filters stay in the URL after a reload', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/listings?owner_completed_min=1&owner_disputed_max=0');
+
+  await expect(page.getByLabel('Completed orders (at least)')).toHaveValue('1');
+  await expect(page.getByLabel('Disputed orders (at most)')).toHaveValue('0');
   await expect(page.getByRole('link', { name: 'A provider offering' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'A customer request' })).toHaveCount(0);
 });

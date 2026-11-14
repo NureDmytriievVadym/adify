@@ -351,6 +351,9 @@ export interface ListQuery {
   country?: string;
   socioeconomic?: string;
   traits?: string[];
+  /** FR-085: minimum completed and maximum currently disputed orders per owner. */
+  ownerCompletedMin?: string;
+  ownerDisputedMax?: string;
   sort?: string;
   limit?: number;
   offset?: number;
@@ -371,6 +374,12 @@ export async function fetchListings(options: ListQuery = {}): Promise<ListResult
   if (options.socioeconomic?.trim()) query.set('socioeconomic', options.socioeconomic.trim());
   for (const trait of options.traits ?? []) {
     if (trait.trim()) query.append('traits', trait.trim());
+  }
+  if (options.ownerCompletedMin !== undefined && options.ownerCompletedMin !== '') {
+    query.set('owner_completed_min', String(options.ownerCompletedMin));
+  }
+  if (options.ownerDisputedMax !== undefined && options.ownerDisputedMax !== '') {
+    query.set('owner_disputed_max', String(options.ownerDisputedMax));
   }
   if (options.sort && options.sort !== 'newest') query.set('sort', options.sort);
   if (options.offset) query.set('offset', String(options.offset));

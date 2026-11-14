@@ -15,6 +15,8 @@ export interface ListingFilters {
   country: string;
   socioeconomic: string;
   traits: string[];
+  ownerCompletedMin: string;
+  ownerDisputedMax: string;
   sort: ListingSort;
 }
 
@@ -35,6 +37,8 @@ export const emptyFilters = (): ListingFilters => ({
   country: '',
   socioeconomic: '',
   traits: [],
+  ownerCompletedMin: '',
+  ownerDisputedMax: '',
   sort: 'newest',
 });
 
@@ -42,6 +46,12 @@ const text = (value: string | null, max = 100) => (value ?? '').trim().slice(0, 
 const digits = (value: string | null, max: number) => {
   const match = /^\d{1,3}$/.exec((value ?? '').trim());
   return match && Number(match[0]) <= max ? match[0] : '';
+};
+const orderCount = (value: string | null) => {
+  const raw = (value ?? '').trim();
+  if (!/^\d{1,6}$/.test(raw)) return '';
+  const number = Number(raw);
+  return number <= 100_000 ? String(number) : '';
 };
 const money = (value: string | null) => {
   const raw = (value ?? '').trim();
@@ -71,17 +81,23 @@ export function filtersFromParams(params: {
     .map((trait) => text(trait, 50))
     .filter(Boolean)
     .slice(0, 20);
+  filters.ownerCompletedMin = orderCount(params.get('owner_completed_min'));
+  filters.ownerDisputedMax = orderCount(params.get('owner_disputed_max'));
   filters.sort = SORT_OPTIONS.some((option) => option.value === sort)
     ? (sort as ListingSort)
     : 'newest';
   return filters;
 }
 
+/** Whether a filter value is set; `0` is a meaningful value, unlike an empty field. */
+export const hasFilterValue = (value: string | undefined): boolean =>
+  value !== undefined && value !== '';
+
 /** Canonical query string; empty values and the default sort are omitted. */
 export function paramsFromFilters(filters: ListingFilters): string {
   const params = new URLSearchParams();
   const set = (key: string, value: string | undefined) => {
-    if (value) params.set(key, value);
+    if (hasFilterValue(value)) params.set(key, String(value));
   };
   set('q', filters.q.trim());
   set('type', filters.type);
@@ -96,6 +112,8 @@ export function paramsFromFilters(filters: ListingFilters): string {
   for (const trait of filters.traits) {
     if (trait.trim()) params.append('traits', trait.trim());
   }
+  set('owner_completed_min', filters.ownerCompletedMin);
+  set('owner_disputed_max', filters.ownerDisputedMax);
   if (filters.sort !== 'newest') set('sort', filters.sort);
   return params.toString();
 }
@@ -110,6 +128,9 @@ export function activeFilterCount(filters: ListingFilters): number {
   if (filters.country) count += 1;
   if (filters.socioeconomic) count += 1;
   if (filters.traits.length) count += 1;
+  if (hasFilterValue(filters.ownerCompletedMin) || hasFilterValue(filters.ownerDisputedMax)) {
+    count += 1;
+  }
   return count;
 }
 
@@ -123,6 +144,11 @@ export function validateFilters(filters: ListingFilters): string | undefined {
   const ageMax = Number(filters.ageMax || Infinity);
   if (filters.ageMin && filters.ageMax && ageMin > ageMax) {
     return 'The minimum age cannot be greater than the maximum.';
+  }
+  for (const value of [filters.ownerCompletedMin, filters.ownerDisputedMax]) {
+    if (hasFilterValue(value) && (!/^\d+$/.test(String(value)) || Number(value) > 100_000)) {
+      return 'Owner order counts must be whole numbers from 0 to 100,000.';
+    }
   }
   return undefined;
 }

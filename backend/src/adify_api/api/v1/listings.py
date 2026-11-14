@@ -110,6 +110,8 @@ async def list_listings(
     country: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     socioeconomic: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     traits: Annotated[list[str] | None, Query()] = None,
+    owner_completed_min: Annotated[int | None, Query(ge=0, le=100_000)] = None,
+    owner_disputed_max: Annotated[int | None, Query(ge=0, le=100_000)] = None,
     sort: ListingSort = ListingSort.NEWEST,
 ) -> ListingPage:
     """Active public listings with search and filters (FR-015, FR-016, FR-084–FR-086).
@@ -121,9 +123,11 @@ async def list_listings(
     bounds apply to the price or budget in UAH. ``delivery_max`` is the maximum
     estimated delivery time in days. Audience bounds select listings whose declared
     age range overlaps the requested one; absent limits are treated as open-ended.
-    ``sort`` accepts date created (``newest``/``oldest``) or price (``price_asc``/
-    ``price_desc``). Listing-owner order-history filters (FR-085) need order data
-    and arrive with the order stories.
+    ``owner_completed_min`` keeps listings whose owner has at least that many orders
+    that reached done; ``owner_disputed_max`` keeps listings whose owner has at most
+    that many orders currently disputed (FR-085). Both counts include the owner's
+    orders as customer or provider. ``sort`` accepts date created
+    (``newest``/``oldest``) or price (``price_asc``/``price_desc``).
     """
     if price_min is not None and price_max is not None and price_min > price_max:
         raise _http_error(
@@ -157,6 +161,8 @@ async def list_listings(
         country=country,
         socioeconomic=socioeconomic,
         traits=traits,
+        owner_completed_min=owner_completed_min,
+        owner_disputed_max=owner_disputed_max,
         sort=sort,
         limit=limit,
         offset=offset,

@@ -11,6 +11,7 @@
     activeFilterCount,
     emptyFilters,
     filtersFromParams,
+    hasFilterValue,
     paramsFromFilters,
     type ListingFilters,
   } from '#lib/listings/filters.ts';
@@ -38,6 +39,8 @@
       country: query.country,
       socioeconomic: query.socioeconomic,
       traits: query.traits,
+      ownerCompletedMin: query.ownerCompletedMin,
+      ownerDisputedMax: query.ownerDisputedMax,
       sort: query.sort,
     }).then((result) => {
       if (active) live = result;
@@ -81,6 +84,17 @@
   }
 
   const filterCount = $derived(activeFilterCount(filters));
+  const ownerCompletedLabel = $derived(
+    hasFilterValue(filters.ownerCompletedMin)
+      ? `Owner: ${filters.ownerCompletedMin}+ completed orders`
+      : '',
+  );
+  const ownerDisputedLabel = $derived.by(() => {
+    if (!hasFilterValue(filters.ownerDisputedMax)) return '';
+    return String(filters.ownerDisputedMax) === '0'
+      ? 'Owner: no disputed orders'
+      : `Owner: up to ${filters.ownerDisputedMax} disputed orders`;
+  });
   const resultLabel = $derived.by(() => {
     if (!live?.ok) return '';
     const noun = live.total === 1 ? 'listing' : 'listings';
@@ -224,6 +238,18 @@
               class="filter-chip"
               onclick={() => update({ traits: [] })}
               >{filters.traits.join(', ')} <Icon name="close" size={13} /></button
+            >{/if}
+          {#if ownerCompletedLabel}<button
+              type="button"
+              class="filter-chip"
+              onclick={() => update({ ownerCompletedMin: '' })}
+              >{ownerCompletedLabel} <Icon name="close" size={13} /></button
+            >{/if}
+          {#if ownerDisputedLabel}<button
+              type="button"
+              class="filter-chip"
+              onclick={() => update({ ownerDisputedMax: '' })}
+              >{ownerDisputedLabel} <Icon name="close" size={13} /></button
             >{/if}
           <button type="button" class="text-button" onclick={clearAll}>Clear all</button>
         </div>

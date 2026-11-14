@@ -16,6 +16,7 @@ from adify_api.seed import (
     ORDERS,
     _account_id,
     _listing_id,
+    _order_id,
     reset_demo_data,
     seed_demo_data,
 )
@@ -125,11 +126,13 @@ async def test_an_active_demo_order_locks_one_listing_category(sessionmaker):
     result = await seed_demo_data(sessionmaker)
     again = await seed_demo_data(sessionmaker)
 
-    assert result.orders_created == len(ORDERS) == 1
+    assert result.orders_created == len(ORDERS) == 3
     assert again.orders_created == 0
-    assert again.orders_existing == 1
+    assert again.orders_existing == 3
     async with sessionmaker() as session:
-        order = await session.scalar(select(Order))
+        order = await session.scalar(
+            select(Order).where(Order.listing_id == _listing_id("banners-journal"))
+        )
         locked = await session.get(Listing, _listing_id("banners-journal"))
         open_ = await session.get(Listing, _listing_id("app-discovery"))
         assert order is not None and locked is not None and open_ is not None
@@ -141,12 +144,31 @@ async def test_an_active_demo_order_locks_one_listing_category(sessionmaker):
         assert await locked_fields(session, open_) == []
 
 
+async def test_demo_orders_cover_completed_and_disputed_track_records(sessionmaker):
+    await seed_demo_data(sessionmaker)
+
+    async with sessionmaker() as session:
+        done = await session.scalar(
+            select(Order).where(Order.id == _order_id("social-everyday-olena"))
+        )
+        disputed = await session.scalar(
+            select(Order).where(Order.id == _order_id("stream-overlay-tetiana"))
+        )
+
+    assert done is not None and done.status == OrderStatus.DONE
+    assert done.provider_id == _account_id("sofiia")
+    assert done.customer_id == _account_id("olena")
+    assert disputed is not None and disputed.status == OrderStatus.DISPUTED
+    assert disputed.provider_id == _account_id("pocket-studio")
+    assert disputed.customer_id == _account_id("tetiana")
+
+
 async def test_reset_removes_demo_orders_before_their_listings(sessionmaker):
     await seed_demo_data(sessionmaker)
 
     removed = await reset_demo_data(sessionmaker)
 
-    assert removed.orders_removed == 1
+    assert removed.orders_removed == 3
     async with sessionmaker() as session:
         assert await session.scalar(select(func.count()).select_from(Order)) == 0
 

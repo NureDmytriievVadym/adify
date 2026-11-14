@@ -728,6 +728,199 @@ async def test_filters_combine_with_search_and_type(client: AsyncClient, provide
     assert [item["id"] for item in response.json()["items"]] == [matching["id"]]
 
 
+# FR-085: owner completed and currently disputed order counts
+
+
+async def record_order(
+    sessionmaker,
+    listing_id: str,
+    status: OrderStatus,
+    *,
+    customer_email: str,
+    provider_email: str,
+) -> None:
+    """Adds an order with explicit participants so owner counts are deterministic."""
+    async with sessionmaker() as session:
+        listing = await session.get(Listing, uuid.UUID(listing_id))
+        customer = await session.scalar(select(Account.id).where(Account.email == customer_email))
+        provider = await session.scalar(select(Account.id).where(Account.email == provider_email))
+        assert listing is not None and customer is not None and provider is not None
+        session.add(
+            Order(
+                listing_id=listing.id,
+                owner_id=listing.owner_id,
+                customer_id=customer,
+                provider_id=provider,
+                status=status,
+                price=listing.price,
+                requirements=requirements_snapshot(listing),
+            )
+        )
+        await session.commit()
+
+
+async def test_filters_by_the_owners_completed_order_count(
+    client: AsyncClient, customer, provider, sessionmaker
+):
+    senior = await sign_up(client, "provider", "senior@example.com", "+380674444444", sessionmaker)
+    first = await publish(client, senior, offer(title="One completed order behind it"))
+    await record_order(
+        sessionmaker,
+        first["id"],
+        OrderStatus.DONE,
+        customer_email="customer@example.com",
+        provider_email="senior@example.com",
+    )
+    second = await publish(client, senior, offer(title="Two completed orders behind it"))
+    await record_order(
+        sessionmaker,
+        second["id"],
+        OrderStatus.DONE,
+        customer_email="customer@example.com",
+        provider_email="senior@example.com",
+    )
+    junior = await sign_up(client, "provider", "junior@example.com", "+380674444445", sessionmaker)
+    third = await publish(client, junior, offer(title="A single completed order"))
+    await record_order(
+        sessionmaker,
+        third["id"],
+        OrderStatus.DONE,
+        customer_email="customer@example.com",
+        provider_email="junior@example.com",
+    )
+    newcomer = await publish(client, provider, offer(title="No completed orders yet"))
+
+    one_or_more = await client.get("/api/v1/listings", params={"owner_completed_min": 1})
+    two_or_more = await client.get("/api/v1/listings", params={"owner_completed_min": 2})
+
+    assert {item["id"] for item in one_or_more.json()["items"]} == {
+        first["id"],
+        second["id"],
+        third["id"],
+    }
+    assert {item["id"] for item in two_or_more.json()["items"]} == {first["id"], second["id"]}
+    assert newcomer["id"] not in {item["id"] for item in one_or_more.json()["items"]}
+
+
+async def test_filters_by_the_owners_disputed_order_count(
+    client: AsyncClient, customer, sessionmaker
+):
+    disputed_provider = await sign_up(
+        client, "provider", "disputed@example.com", "+380675555555", sessionmaker
+    )
+    calm_provider = await sign_up(
+        client, "provider", "calm@example.com", "+380676666666", sessionmaker
+    )
+    disputed = await publish(client, disputed_provider, offer(title="One dispute open"))
+    await record_order(
+        sessionmaker,
+        disputed["id"],
+        OrderStatus.DISPUTED,
+        customer_email="customer@example.com",
+        provider_email="disputed@example.com",
+    )
+    calm = await publish(client, calm_provider, offer(title="No disputes open"))
+    await record_order(
+        sessionmaker,
+        calm["id"],
+        OrderStatus.DONE,
+        customer_email="customer@example.com",
+        provider_email="calm@example.com",
+    )
+
+    no_disputes = await client.get("/api/v1/listings", params={"owner_disputed_max": 0})
+    at_most_one = await client.get("/api/v1/listings", params={"owner_disputed_max": 1})
+
+    assert [item["id"] for item in no_disputes.json()["items"]] == [calm["id"]]
+    assert {item["id"] for item in at_most_one.json()["items"]} == {
+        disputed["id"],
+        calm["id"],
+    }
+
+
+async def test_owner_counts_combine_like_the_backlog_demo(
+    client: AsyncClient, customer, sessionmaker
+):
+    """Backlog #11: owners with ≥ 1 completed order and 0 disputed orders."""
+    trusted = await sign_up(
+        client, "provider", "trusted@example.com", "+380677777777", sessionmaker
+    )
+    distrusted = await sign_up(
+        client, "provider", "distrusted@example.com", "+380678888888", sessionmaker
+    )
+    newcomer = await sign_up(
+        client, "provider", "newcomer@example.com", "+380679999999", sessionmaker
+    )
+    trusted_listing = await publish(client, trusted, offer(title="Completed work, no disputes"))
+    await record_order(
+        sessionmaker,
+        trusted_listing["id"],
+        OrderStatus.DONE,
+        customer_email="customer@example.com",
+        provider_email="trusted@example.com",
+    )
+    disputed_listing = await publish(client, distrusted, offer(title="Completed work, one dispute"))
+    await record_order(
+        sessionmaker,
+        disputed_listing["id"],
+        OrderStatus.DONE,
+        customer_email="customer@example.com",
+        provider_email="distrusted@example.com",
+    )
+    await record_order(
+        sessionmaker,
+        disputed_listing["id"],
+        OrderStatus.DISPUTED,
+        customer_email="customer@example.com",
+        provider_email="distrusted@example.com",
+    )
+    new_listing = await publish(client, newcomer, offer(title="No orders yet"))
+
+    response = await client.get(
+        "/api/v1/listings", params={"owner_completed_min": 1, "owner_disputed_max": 0}
+    )
+
+    assert [item["id"] for item in response.json()["items"]] == [trusted_listing["id"]]
+    assert disputed_listing["id"] not in {item["id"] for item in response.json()["items"]}
+    assert new_listing["id"] not in {item["id"] for item in response.json()["items"]}
+
+
+async def test_owner_counts_include_the_owners_orders_as_customer(
+    client: AsyncClient, customer, provider, sessionmaker
+):
+    request = (
+        await client.post("/api/v1/listings/requests", json=REQUEST, headers=customer)
+    ).json()
+    await sign_up(client, "provider", "counterparty@example.com", "+380674444446", sessionmaker)
+    await record_order(
+        sessionmaker,
+        request["id"],
+        OrderStatus.DONE,
+        customer_email="customer@example.com",
+        provider_email="counterparty@example.com",
+    )
+    unrelated = await publish(client, provider, offer(title="No completed orders yet"))
+
+    response = await client.get("/api/v1/listings", params={"owner_completed_min": 1})
+
+    assert [item["id"] for item in response.json()["items"]] == [request["id"]]
+    assert unrelated["id"] not in {item["id"] for item in response.json()["items"]}
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"owner_completed_min": -1},
+        {"owner_disputed_max": -1},
+        {"owner_completed_min": "x"},
+    ],
+)
+async def test_rejects_invalid_owner_order_counts(client: AsyncClient, params):
+    response = await client.get("/api/v1/listings", params=params)
+
+    assert response.status_code == 422
+
+
 # FR-017: editing a listing
 
 

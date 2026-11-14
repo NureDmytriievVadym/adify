@@ -209,6 +209,41 @@
       <p class="field-hint" id="filter-traits-hint">Separate traits with commas.</p>
     </fieldset>
 
+    <fieldset class="filter-group">
+      <legend>Owner track record</legend>
+      <div class="filter-pair">
+        <div>
+          <label for="filter-owner-completed-min">Completed orders (at least)</label>
+          <input
+            id="filter-owner-completed-min"
+            type="number"
+            min="0"
+            max="100000"
+            step="1"
+            placeholder="Any"
+            bind:value={draft.ownerCompletedMin}
+            aria-describedby="filter-owner-hint"
+          />
+        </div>
+        <div>
+          <label for="filter-owner-disputed-max">Disputed orders (at most)</label>
+          <input
+            id="filter-owner-disputed-max"
+            type="number"
+            min="0"
+            max="100000"
+            step="1"
+            placeholder="Any"
+            bind:value={draft.ownerDisputedMax}
+            aria-describedby="filter-owner-hint"
+          />
+        </div>
+      </div>
+      <p class="field-hint" id="filter-owner-hint">
+        Completed orders reached done; disputed orders are currently in dispute.
+      </p>
+    </fieldset>
+
     <div class="filter-actions">
       <button class="button button-dark" type="submit">Apply filters</button>
       <button class="text-button" type="button" onclick={reset}>Clear all</button>

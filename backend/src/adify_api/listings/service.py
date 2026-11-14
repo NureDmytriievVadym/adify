@@ -23,7 +23,7 @@ from adify_api.listings.schemas import (
     OfferCreate,
     RequestCreate,
 )
-from adify_api.orders.models import ACTIVE_ORDER_STATUSES, Order
+from adify_api.orders.models import ACTIVE_ORDER_STATUSES, Order, OrderStatus
 
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 LIKE_ESCAPE = "\\"
@@ -34,6 +34,19 @@ def _like_pattern(text: str) -> str:
     escaped = text.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2)
     escaped = escaped.replace("%", f"{LIKE_ESCAPE}%").replace("_", f"{LIKE_ESCAPE}_")
     return f"%{escaped}%"
+
+
+def _owner_order_count(status: OrderStatus):
+    """FR-085: the owner's order count, as customer or provider, in one state."""
+    return (
+        select(func.count(Order.id))
+        .where(
+            or_(Order.customer_id == Listing.owner_id, Order.provider_id == Listing.owner_id),
+            Order.status == status,
+        )
+        .correlate(Listing)
+        .scalar_subquery()
+    )
 
 
 class ListingError(Exception):
@@ -165,6 +178,8 @@ async def list_listings(
     country: str | None = None,
     socioeconomic: str | None = None,
     traits: list[str] | None = None,
+    owner_completed_min: int | None = None,
+    owner_disputed_max: int | None = None,
     sort: ListingSort = ListingSort.NEWEST,
     limit: int = 20,
     offset: int = 0,
@@ -177,6 +192,11 @@ async def list_listings(
     listings are left out everywhere, the owner's own list included (FR-020). Audience ranges
     overlap rather than require exact equality: asking for ages 18–24 includes a listing
     targeting 18–34.
+
+    FR-085 counts an owner's orders as customer or provider: ``owner_completed_min``
+    keeps owners with at least that many orders that reached done, and
+    ``owner_disputed_max`` keeps owners with at most that many orders currently
+    disputed.
     """
     filters = [Listing.deleted_at.is_(None)]
     if type_ is not None:
@@ -185,6 +205,10 @@ async def list_listings(
         filters.append(Listing.category == category)
     if owner_id is not None:
         filters.append(Listing.owner_id == owner_id)
+    if owner_completed_min is not None:
+        filters.append(_owner_order_count(OrderStatus.DONE) >= owner_completed_min)
+    if owner_disputed_max is not None:
+        filters.append(_owner_order_count(OrderStatus.DISPUTED) <= owner_disputed_max)
     if open_only:
         filters.append(Listing.paused_at.is_(None))
         filters.append(Listing.expires_at > datetime.now(UTC))

@@ -32,8 +32,11 @@ Compose network; the backend applies database migrations on start.
 
 With the development stack running, fill PostgreSQL with six verified demo accounts
 (three customers, three providers), thirteen listings covering all six categories, and
-one active order that locks the category of Digital Daily's banner offering (FR-017).
-Digital Daily's newsletter offering is expired, so it cannot be resumed (FR-019):
+three demo orders: an in-progress order that locks the category of Digital Daily's
+banner offering (FR-017), a completed order for Sofiia K. with no current dispute, and
+a disputed order for Pocket Studio. The completed and disputed orders make the owner
+track-record filter (FR-085) demonstrable. Digital Daily's newsletter offering is
+expired, so it cannot be resumed (FR-019):
 
 ```sh
 just seed          # safe to re-run; existing demo rows are kept
