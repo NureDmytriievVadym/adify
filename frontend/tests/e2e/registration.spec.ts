@@ -21,6 +21,45 @@ async function mockRegistration(page: Page, respond: (body: Record<string, strin
   return requests;
 }
 
+// Registration signs the user in, so the sign-in endpoint is answered too. The refresh
+// call that restores a session on every page load always fails: nobody is signed in yet.
+async function mockSignIn(page: Page, role: string, succeeds = true) {
+  const requests: Record<string, string>[] = [];
+  await page.route('**/api/v1/auth/*', async (route: Route) => {
+    const origin = (await route.request().headerValue('origin')) ?? '*';
+    const headers = {
+      'access-control-allow-origin': origin,
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-headers': 'content-type',
+      'access-control-allow-methods': 'POST',
+    };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (!route.request().url().endsWith('/sign-in') || !succeeds)
+      return route.fulfill({ status: 401, headers, json: { detail: [] } });
+    requests.push(route.request().postDataJSON() as Record<string, string>);
+    return route.fulfill({
+      status: 200,
+      headers,
+      json: {
+        access_token: 'token',
+        token_type: 'bearer',
+        expires_in: 900,
+        account: {
+          id: '1',
+          display_name: 'Olena Koval',
+          email: 'olena@example.com',
+          phone: '+380671234567',
+          role,
+          status: 'active',
+          email_verified: false,
+          phone_verified: false,
+        },
+      },
+    });
+  });
+  return requests;
+}
+
 async function fillForm(page: Page, role: 'Customer' | 'Provider', phone = '+380 67 123 45 67') {
   await page.getByRole('radio', { name: new RegExp(role) }).check();
   await page.getByLabel('Display name').fill('Olena Koval');
@@ -30,11 +69,12 @@ async function fillForm(page: Page, role: 'Customer' | 'Provider', phone = '+380
 }
 
 for (const role of ['Customer', 'Provider'] as const) {
-  test(`registers a ${role.toLowerCase()} account`, async ({ page }) => {
+  test(`registers a ${role.toLowerCase()} account and signs it in`, async ({ page }) => {
     const requests = await mockRegistration(page, (body) => ({
       status: 201,
       json: { ...body, id: '1', email_verified: false, phone_verified: false, status: 'active' },
     }));
+    const signIns = await mockSignIn(page, role.toLowerCase());
     await page.goto('/');
     await page.getByRole('link', { name: 'Get started' }).click();
     await expect(page).toHaveURL('/register');
@@ -42,8 +82,10 @@ for (const role of ['Customer', 'Provider'] as const) {
     await fillForm(page, role);
     await page.getByRole('button', { name: 'Create account' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Welcome, Olena Koval.' })).toBeVisible();
-    await expect(page.getByRole('status')).toContainText(`Your ${role.toLowerCase()} account`);
+    await expect(page).toHaveURL('/account');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Olena Koval.');
+    await expect(page.getByRole('link', { name: 'My account' })).toBeVisible();
+    expect(signIns).toEqual([{ email: 'olena@example.com', password: 'secret123' }]);
     expect(requests).toEqual([
       {
         display_name: 'Olena Koval',
@@ -55,6 +97,25 @@ for (const role of ['Customer', 'Provider'] as const) {
     ]);
   });
 }
+
+test('keeps the new account and offers sign-in when the automatic sign-in fails', async ({
+  page,
+}) => {
+  await mockRegistration(page, (body) => ({
+    status: 201,
+    json: { ...body, id: '1', email_verified: false, phone_verified: false, status: 'active' },
+  }));
+  await mockSignIn(page, 'customer', false);
+  await page.goto('/register');
+
+  await fillForm(page, 'Customer');
+  await page.getByRole('button', { name: 'Create account' }).click();
+
+  await expect(page).toHaveURL('/register');
+  await expect(page.getByRole('heading', { name: 'Welcome, Olena Koval.' })).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('Your customer account');
+  await expect(page.getByRole('link', { name: 'Sign in' }).last()).toBeVisible();
+});
 
 test('explains invalid input before sending it', async ({ page }) => {
   const requests = await mockRegistration(page, () => ({ status: 500, json: {} }));
