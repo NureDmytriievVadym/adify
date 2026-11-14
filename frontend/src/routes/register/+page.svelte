@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { goto } from '$app/navigation';
   import Icon from '#lib/components/Icon.svelte';
+  import { signIn } from '#lib/accounts/session.svelte.ts';
   import {
     registerAccount,
     validateRegistration,
@@ -55,11 +57,16 @@
 
     submitting = true;
     const result = await registerAccount(input);
-    submitting = false;
     if (result.ok) {
+      // REF-003: sign the new user in right away. If that fails, the account still exists,
+      // so fall back to the welcome card with a link to sign in.
+      const signedIn = await signIn(input.email, input.password);
+      submitting = false;
+      if (signedIn.ok) return goto('/account');
       account = result.account;
       return;
     }
+    submitting = false;
     errors = result.fieldErrors;
     message = result.message ?? '';
     await focusFirstError();
