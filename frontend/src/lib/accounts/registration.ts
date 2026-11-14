@@ -25,26 +25,45 @@ interface ApiFieldError {
 
 const fields: RegistrationField[] = ['display_name', 'email', 'phone', 'role', 'password'];
 
-export const normalizePhone = (phone: string) => phone.replace(/[\s()-]/g, '');
+export const normalizePhone = (phone: string) => phone.replace(/[\s()_-]/g, '');
+
+export const UKRAINIAN_PHONE_PREFIX = '+38 (0';
+export const UKRAINIAN_PHONE_MASK = '+38 (0__)-___-__-__';
+
+export function formatPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (value.trimStart().startsWith('+') && !digits.startsWith('380'))
+    return UKRAINIAN_PHONE_MASK;
+
+  let nationalNumber = digits.startsWith('380') ? digits.slice(3) : digits;
+  if (!nationalNumber && value.trimStart().startsWith('+')) return UKRAINIAN_PHONE_MASK;
+  if (nationalNumber.startsWith('0')) nationalNumber = nationalNumber.slice(1);
+  nationalNumber = nationalNumber.slice(0, 9);
+
+  const slots = Array.from({ length: 9 }, (_, index) => nationalNumber[index] ?? '_');
+  return `+38 (0${slots.slice(0, 2).join('')})-${slots.slice(2, 5).join('')}-${slots
+    .slice(5, 7)
+    .join('')}-${slots.slice(7, 9).join('')}`;
+}
 
 // FR-080, shared with password reset.
 export const passwordError = (password: string) =>
   password.length < 8 || !/\p{L}/u.test(password) || !/\d/.test(password)
-    ? 'Use at least 8 characters, including at least one letter and one digit.'
+    ? 'Use at least 8 characters, including at least one letter and one digit'
     : undefined;
 
 // Mirrors the API rules (FR-078, FR-080) so most mistakes are caught before a request.
 export function validateRegistration(input: RegistrationInput): FieldErrors {
   const errors: FieldErrors = {};
-  if (!input.display_name.trim()) errors.display_name = 'Enter a display name.';
+  if (!input.display_name.trim()) errors.display_name = 'Enter a display name';
   else if (input.display_name.trim().length > 100)
-    errors.display_name = 'Use at most 100 characters.';
+    errors.display_name = 'Use at most 100 characters';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim()))
-    errors.email = 'Enter a valid email address.';
+    errors.email = 'Enter a valid email address';
   if (!/^\+380\d{9}$/.test(normalizePhone(input.phone)))
-    errors.phone = 'Enter a Ukrainian phone number in the format +380XXXXXXXXX.';
+    errors.phone = 'Enter a Ukrainian phone number in the format +380XXXXXXXXX';
   if (input.role !== 'customer' && input.role !== 'provider')
-    errors.role = 'Choose exactly one role: customer or provider.';
+    errors.role = 'Choose exactly one role: customer or provider';
   const password = passwordError(input.password);
   if (password) errors.password = password;
   return errors;
@@ -85,7 +104,7 @@ export async function registerAccount(
     }
   }
   if (!message && Object.keys(fieldErrors).length === 0) {
-    message = 'Registration failed. Try again in a moment.';
+    message = 'Registration failed. Try again in a moment';
   }
   return { ok: false, fieldErrors, message };
 }

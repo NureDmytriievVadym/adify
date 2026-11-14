@@ -60,13 +60,27 @@ async function mockSignIn(page: Page, role: string, succeeds = true) {
   return requests;
 }
 
-async function fillForm(page: Page, role: 'Customer' | 'Provider', phone = '+380 67 123 45 67') {
+async function fillForm(page: Page, role: 'Customer' | 'Provider', phone = '671234567') {
   await page.getByRole('radio', { name: new RegExp(role) }).check();
   await page.getByLabel('Display name').fill('Olena Koval');
   await page.getByLabel('Email address').fill('olena@example.com');
   await page.getByLabel('Phone number').fill(phone);
   await page.getByLabel('Password').fill('secret123');
 }
+
+test('formats a local phone number using the Ukrainian template', async ({ page }) => {
+  await page.goto('/register');
+
+  const phone = page.getByLabel('Phone number');
+  await expect(phone).toHaveValue('+38 (0__)-___-__-__');
+  await phone.press('Control+A');
+  await phone.press('Backspace');
+  await expect(phone).toHaveValue('+38 (0__)-___-__-__');
+
+  await phone.pressSequentially('671234567');
+
+  await expect(phone).toHaveValue('+38 (067)-123-45-67');
+});
 
 for (const role of ['Customer', 'Provider'] as const) {
   test(`registers a ${role.toLowerCase()} account and signs it in`, async ({ page }) => {
