@@ -1,4 +1,3 @@
-import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -7,8 +6,10 @@ from sqlalchemy import String, cast, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import Account
+from adify_api.core import storage
 from adify_api.core.config import get_settings
-from adify_api.listings import storage
+from adify_api.listings.expiry import expiry_date as selected_expiry_date
+from adify_api.listings.expiry import expiry_moment
 from adify_api.listings.models import (
     Listing,
     ListingAttachment,
@@ -25,7 +26,6 @@ from adify_api.listings.schemas import (
 )
 from adify_api.orders.models import ACTIVE_ORDER_STATUSES, Order
 
-CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 LIKE_ESCAPE = "\\"
 
 
@@ -58,6 +58,14 @@ async def create_offer(session: AsyncSession, owner: Account, data: OfferCreate)
 
 
 async def _create(session, owner, type_, data, price, delivery_days) -> Listing:
+    expiry = expiry_moment(data.expiry_date)
+    if expiry <= datetime.now(UTC):
+        raise ListingError(
+            422,
+            "expiry_date_passed",
+            "Choose an expiry date that has not passed.",
+            "expiry_date",
+        )
     listing = Listing(
         owner_id=owner.id,
         type=type_,
@@ -67,6 +75,7 @@ async def _create(session, owner, type_, data, price, delivery_days) -> Listing:
         price=price,
         delivery_days=delivery_days,
         specs=[spec.model_dump() for spec in data.specs],
+        expires_at=expiry,
     )
     _set_audience(listing, data.audience)
     session.add(listing)
@@ -131,6 +140,25 @@ async def update_listing(session: AsyncSession, listing: Listing, data: ListingU
                 "category",
             )
         listing.category = data.category
+    if "expiry_date" in sent and data.expiry_date != selected_expiry_date(listing.expires_at):
+        # FR-021: the owner chooses when the listing ends, but FR-019 forbids reviving
+        # an expired listing; changing its date would do exactly that.
+        if listing.status == ListingStatus.EXPIRED:
+            raise ListingError(
+                409,
+                "listing_expired",
+                "An expired listing cannot be extended. Publish a new listing instead.",
+                "expiry_date",
+            )
+        expiry = expiry_moment(data.expiry_date)
+        if expiry <= datetime.now(UTC):
+            raise ListingError(
+                422,
+                "expiry_date_passed",
+                "Choose an expiry date that has not passed.",
+                "expiry_date",
+            )
+        listing.expires_at = expiry
 
     for field in ("title", "description", "delivery_days"):
         if field in sent:
@@ -187,6 +215,7 @@ async def list_listings(
         filters.append(Listing.owner_id == owner_id)
     if open_only:
         filters.append(Listing.paused_at.is_(None))
+        filters.append(Listing.expired_at.is_(None))
         filters.append(Listing.expires_at > datetime.now(UTC))
     if search and (term := search.strip()):
         pattern = _like_pattern(term)
@@ -337,11 +366,6 @@ def ensure_owner(listing: Listing, account: Account) -> None:
         raise ListingError(403, "not_listing_owner", "Only the owner can change this listing.")
 
 
-def clean_filename(filename: str) -> str:
-    name = CONTROL_CHARACTERS.sub("", filename.replace("\\", "/").rsplit("/", 1)[-1]).strip()
-    return name[-255:] or "attachment"
-
-
 async def add_attachment(
     session: AsyncSession, listing: Listing, filename: str, data: bytes
 ) -> ListingAttachment:
@@ -365,7 +389,7 @@ async def add_attachment(
     attachment = ListingAttachment(
         id=uuid.uuid4(),
         listing_id=listing.id,
-        filename=clean_filename(filename),
+        filename=storage.clean_filename(filename),
         content_type=content_type,
         size=len(data),
     )

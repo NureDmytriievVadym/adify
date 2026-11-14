@@ -69,7 +69,13 @@ async function mockApi(page: Page, { viewer, listingType = 'offer', status = 'ac
           details: body.details,
           price_uah: `${Number(body.price_uah).toFixed(2)}`,
           deadline: body.deadline,
-          stages: body.stages,
+          stages: (body.stages as { title: string; deadline: string }[]).map((stage, index) => ({
+            ...stage,
+            id: `stage-${index}`,
+            completed_at: null,
+            completed_by: null,
+          })),
+          evidence: [],
           requirements: {
             listing_type: listingType,
             category: 'website-banners',
@@ -114,6 +120,7 @@ async function mockApi(page: Page, { viewer, listingType = 'offer', status = 'ac
         price_uah: '3000.00',
         deadline: null,
         stages: [],
+        evidence: [],
         requirements: {
           listing_type: listingType,
           category: 'sponsored-articles',

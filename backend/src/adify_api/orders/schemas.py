@@ -3,7 +3,15 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
+from pydantic_core import PydanticCustomError
 
 from adify_api.accounts.models import Account
 from adify_api.core.config import get_settings
@@ -44,6 +52,15 @@ class StageInput(BaseModel):
 
     title: StageTitle
     deadline: date | None = None
+
+    @field_validator("deadline")
+    @classmethod
+    def deadline_not_past(cls, value: date | None) -> date | None:
+        if value is not None and value < datetime.now(UTC).date():
+            raise PydanticCustomError(
+                "stage_deadline_past", "The stage deadline cannot be in the past."
+            )
+        return value
 
 
 class OrderCreate(BaseModel):
@@ -95,8 +112,28 @@ def start_deadline(order: Order) -> datetime | None:
 
 
 class StageResponse(BaseModel):
+    id: uuid.UUID
     title: str
     deadline: date | None
+    completed_at: datetime | None
+    completed_by: OwnerResponse | None
+
+
+class EvidenceFileResponse(BaseModel):
+    id: uuid.UUID
+    filename: str
+    content_type: str
+    size: int
+    url: str
+    created_at: datetime
+
+
+class EvidenceResponse(BaseModel):
+    id: uuid.UUID
+    author: OwnerResponse
+    note: str | None
+    files: list[EvidenceFileResponse]
+    created_at: datetime
 
 
 class OrderListing(BaseModel):
@@ -133,6 +170,8 @@ class OrderResponse(BaseModel):
     review_started_at: datetime | None
     completed_at: datetime | None
     change_requests: list[ChangeRequestResponse]
+    # FR-041: evidence from both participants, oldest first.
+    evidence: list[EvidenceResponse]
 
     @classmethod
     def for_viewer(cls, order: Order, viewer: Account) -> "OrderResponse":
@@ -147,7 +186,16 @@ class OrderResponse(BaseModel):
             details=order.details,
             price_uah=order.price,
             deadline=order.deadline,
-            stages=[StageResponse(title=s.title, deadline=s.deadline) for s in order.stages],
+            stages=[
+                StageResponse(
+                    id=s.id,
+                    title=s.title,
+                    deadline=s.deadline,
+                    completed_at=s.completed_at,
+                    completed_by=public(s.completed_by) if s.completed_by else None,
+                )
+                for s in order.stages
+            ],
             requirements=RequirementsSnapshot.model_validate(order.requirements),
             listing=OrderListing(
                 id=order.listing.id, title=order.listing.title, type=order.listing.type
@@ -169,5 +217,25 @@ class OrderResponse(BaseModel):
             completed_at=order.completed_at,
             change_requests=[
                 ChangeRequestResponse.model_validate(r) for r in order.change_requests
+            ],
+            evidence=[
+                EvidenceResponse(
+                    id=e.id,
+                    author=public(e.author),
+                    note=e.note,
+                    files=[
+                        EvidenceFileResponse(
+                            id=f.id,
+                            filename=f.filename,
+                            content_type=f.content_type,
+                            size=f.size,
+                            url=f"/api/v1/orders/{order.id}/evidence/{e.id}/files/{f.id}",
+                            created_at=f.created_at,
+                        )
+                        for f in e.files
+                    ],
+                    created_at=e.created_at,
+                )
+                for e in order.evidence
             ],
         )

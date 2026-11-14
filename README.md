@@ -57,6 +57,37 @@ Demo data is development-only. The CLI refuses to run unless
 container. `--reset` deletes only accounts whose email ends in `@demo.adify.app`,
 their listings, and their orders.
 
+## Scheduled listing expiry
+
+Listings end at 23:59 Kyiv time on the date their owner selected, and the active
+listings of an owner who has not signed in for three months are expired by a job
+(FR-021–FR-023). The job runs once per invocation and is intended for cron:
+
+```sh
+just jobs --job listings                  # both listing rules at the current time
+just jobs --job date                      # owner-selected dates, run at 23:59 Europe/Kyiv
+just jobs --job inactivity                # three-month inactivity and email notices
+just jobs --now 2026-11-14T23:59+02:00    # replay a moment for a demo
+```
+
+`just jobs` without `--job` runs every scheduled job, including the order start
+timeout (`just order-timeouts`). The inactivity notice is emailed through the same
+Gmail/Mailpit service as the verification codes. See
+[story #15](docs/story-015.md) for the cron example and the demo.
+
+## Evidence malware scanning
+
+Evidence uploads always pass a built-in EICAR signature check, so the test file is
+rejected without external services. For full ClamAV scanning start the optional
+`malware` profile and point the API at it:
+
+```sh
+ADIFY_CLAMAV_HOST=clamav docker compose --profile malware up
+```
+
+A configured scanner that is unreachable rejects the upload instead of accepting an
+unscanned file. See [story #22](docs/story-022.md) for the limits and the demo.
+
 ## Checks
 
 Runtime, lint, backend tests, and browser tests run in containers. Formatting writes
@@ -93,7 +124,7 @@ justfile         Developer commands
 Start with [architecture](docs/architecture.md), [contributing](CONTRIBUTING.md),
 [story #1](docs/story-01.md), [story #3](docs/story-03.md),
 [story #4](docs/story-04.md), [story #7](docs/story-07.md),
-[story #11](docs/story-11.md), [story #5](docs/story-05.md), [story #17](docs/story-17.md), [story #19](docs/story-19.md), [story #20](docs/story-20.md), [story #21](docs/story-21.md), [story #23](docs/story-23.md), [stories #25–26](docs/story-25-26.md),
+[story #11](docs/story-11.md), [story #5](docs/story-05.md), [story #15](docs/story-015.md), [story #17](docs/story-17.md), [story #19](docs/story-19.md), [story #20](docs/story-20.md), [story #21](docs/story-21.md), [story #22](docs/story-022.md), [story #23](docs/story-23.md), [stories #25–26](docs/story-25-26.md),
 [listings ADY-008–010](docs/story-08-10.md),
 [editing listings](docs/story-edit-listing.md),
 [password reset](docs/story-password-reset.md),

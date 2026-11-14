@@ -29,6 +29,7 @@
     'category',
     'title',
     'description',
+    'expiry_date',
     'price',
     'delivery_days',
     'specs',
@@ -74,6 +75,7 @@
   }
 
   const isRequest = $derived(listing?.type === 'request');
+  const expiryLocked = $derived(listing?.status === 'expired');
   const kept = $derived(listing?.attachments.filter((item) => !removed.includes(item.id)) ?? []);
 
   function attachmentError() {
@@ -114,7 +116,7 @@
     event.preventDefault();
     if (!listing || !input) return;
     message = '';
-    errors = validateListing(input, listing.type);
+    errors = validateListing(input, listing.type, { allowPastExpiry: expiryLocked });
     fileError = attachmentError();
     if (Object.keys(errors).length > 0 || fileError) return focusFirstError();
 
@@ -220,7 +222,7 @@
         <p class="form-alert" role="alert" tabindex="-1">{message}</p>
       {/if}
 
-      <ListingFields bind:input {errors} type={listing.type} {categoryLocked} />
+      <ListingFields bind:input {errors} type={listing.type} {categoryLocked} {expiryLocked} />
 
       <fieldset class="filter-group attachment-editor">
         <legend>Attachments (optional)</legend>

@@ -22,6 +22,10 @@ services:
       ADIFY_MONO_API_URL: ${ADIFY_MONO_API_URL:-http://mono-mock:8000}
       # No colon: an explicitly empty value in .env sends no webhook URL at all.
       ADIFY_API_PUBLIC_URL: ${ADIFY_API_PUBLIC_URL-http://backend:8000}
+      # FR-041: set ADIFY_CLAMAV_HOST=clamav with `--profile malware` to scan evidence
+      # with ClamAV. An empty host uses the built-in EICAR check only.
+      ADIFY_CLAMAV_HOST: ${ADIFY_CLAMAV_HOST:-}
+      ADIFY_CLAMAV_PORT: ${ADIFY_CLAMAV_PORT:-3310}
     init: true
     depends_on:
       postgres:
@@ -135,7 +139,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # Optional FR-041 malware scanner. Start it only when needed:
+  #   ADIFY_CLAMAV_HOST=clamav docker compose --profile malware up
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ['malware']
+    ports:
+      - '127.0.0.1:${CLAMAV_PORT:-3310}:3310'
+    volumes:
+      - clamav_data:/var/lib/clamav
+
 volumes:
   uploads_data:
   postgres_data:
   redis_data:
+  clamav_data:

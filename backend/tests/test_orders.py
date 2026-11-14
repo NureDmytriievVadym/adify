@@ -17,6 +17,7 @@ OFFER = {
     "description": "A display banner placement on an independent design journal.",
     "price_uah": "3500.00",
     "delivery_days": 5,
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [{"label": "Dimensions", "value": "728 x 90 px"}],
 }
 REQUEST = {
@@ -24,6 +25,7 @@ REQUEST = {
     "title": "Looking for a home for our story",
     "description": "We want a website to publish a sponsored article about our brand.",
     "budget_uah": "4500",
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [],
 }
 
@@ -99,8 +101,20 @@ async def test_owner_creates_an_order_awaiting_payment(client: AsyncClient, prov
     assert order["price_uah"] == "3000.00"
     assert order["deadline"] == days(20)
     assert order["stages"] == [
-        {"title": "Banner goes live", "deadline": days(5)},
-        {"title": "Placement report", "deadline": days(19)},
+        {
+            "id": order["stages"][0]["id"],
+            "title": "Banner goes live",
+            "deadline": days(5),
+            "completed_at": None,
+            "completed_by": None,
+        },
+        {
+            "id": order["stages"][1]["id"],
+            "title": "Placement report",
+            "deadline": days(19),
+            "completed_at": None,
+            "completed_by": None,
+        },
     ]
     assert order["is_listing_owner"] is True
     assert order["customer"]["role"] == "customer"

@@ -45,7 +45,8 @@ New order fields: `start_deadline` (paid orders only: `paid_at` + 7 days), `work
 
 ## Start timeout job
 
-`python -m adify_api.jobs` runs once and cancels every paid order whose `paid_at` is more than
+`python -m adify_api.jobs --job orders` runs once and cancels every paid order whose
+`paid_at` is more than
 `ADIFY_PAID_ORDER_START_TIMEOUT_DAYS` (default 7) days ago: Mono cancels the invoice
 (`reversed`), and the order records `canceled_at` and `cancel_reason = start_timeout`. A
 deployment schedules it at least daily with cron. Locally:

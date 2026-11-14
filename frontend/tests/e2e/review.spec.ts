@@ -43,6 +43,7 @@ async function mockApi(page: Page, { viewer, status, pendingRequest }: Options) 
     price_uah: '3000.00',
     deadline: null,
     stages: [],
+    evidence: [],
     requirements: {
       listing_type: 'offer',
       category: 'website-banners',

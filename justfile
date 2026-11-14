@@ -47,4 +47,9 @@ seed *args:
 # FR-132: cancel paid orders not started within 7 days and release their Mono holds.
 # A deployment schedules it daily with cron; `--now 2026-12-01` replays a later date.
 order-timeouts *args:
+    docker compose exec -T backend python -m adify_api.jobs --job orders {{args}}
+
+# All scheduled jobs; extra args go to the CLI. Use `--job date`, `--job inactivity`,
+# or `--job listings` to run only the listing rules (FR-021–FR-023).
+jobs *args:
     docker compose exec -T backend python -m adify_api.jobs {{args}}
