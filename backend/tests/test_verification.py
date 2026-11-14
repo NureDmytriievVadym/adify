@@ -16,7 +16,14 @@ EMAIL = "/api/v1/accounts/me/verification/email"
 PHONE = "/api/v1/accounts/me/verification/phone"
 
 
-async def sign_up(client: AsyncClient, role: str, email: str, phone: str) -> dict[str, str]:
+async def sign_up(
+    client: AsyncClient,
+    role: str,
+    email: str,
+    phone: str,
+    *,
+    request_email_code: bool = True,
+) -> dict[str, str]:
     body = {
         "display_name": f"Test {role}",
         "email": email,
@@ -28,7 +35,11 @@ async def sign_up(client: AsyncClient, role: str, email: str, phone: str) -> dic
     tokens = await client.post(
         "/api/v1/auth/sign-in", json={"email": email, "password": "secret123"}
     )
-    return {"Authorization": f"Bearer {tokens.json()['access_token']}"}
+    headers = {"Authorization": f"Bearer {tokens.json()['access_token']}"}
+    if request_email_code:
+        response = await client.post(f"{EMAIL}/code", headers=headers)
+        assert response.status_code == 202, response.text
+    return headers
 
 
 @pytest.fixture
@@ -63,7 +74,32 @@ async def verify_both(client: AsyncClient, headers, outbox) -> None:
     assert response.status_code == 200
 
 
-async def test_registration_emails_a_code_with_a_link(client: AsyncClient, customer, outbox):
+async def test_registration_email_code_is_sent_only_when_requested(
+    client: AsyncClient, outbox
+):
+    registration = await client.post(
+        "/api/v1/accounts",
+        json={
+            "display_name": "Test customer",
+            "email": "customer@example.com",
+            "phone": "+380671111111",
+            "role": "customer",
+            "password": "secret123",
+        },
+    )
+    assert registration.status_code == 201
+    assert outbox == []
+
+    tokens = await client.post(
+        "/api/v1/auth/sign-in",
+        json={"email": "customer@example.com", "password": "secret123"},
+    )
+    headers = {"Authorization": f"Bearer {tokens.json()['access_token']}"}
+    status = await client.get("/api/v1/accounts/me/verification", headers=headers)
+    assert status.json()["email"]["code_sent"] is False
+
+    sent = await client.post(f"{EMAIL}/code", headers=headers)
+    assert sent.status_code == 202
     message = outbox[-1]
 
     assert message["To"] == "customer@example.com"
@@ -216,7 +252,13 @@ async def test_registration_succeeds_when_mail_is_down(client: AsyncClient, monk
         raise OSError("connection refused")
 
     monkeypatch.setattr(mail, "_send", broken)
-    await sign_up(client, "provider", "provider@example.com", "+380672222222")
+    await sign_up(
+        client,
+        "provider",
+        "provider@example.com",
+        "+380672222222",
+        request_email_code=False,
+    )
 
 
 OFFER = {
