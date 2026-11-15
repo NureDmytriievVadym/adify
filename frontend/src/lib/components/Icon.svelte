@@ -13,7 +13,9 @@
     | 'check'
     | 'shield'
     | 'chevron'
-    | 'clock';
+    | 'clock'
+    | 'copy'
+    | 'phone';
   let { name, size = 20 }: { name: IconName; size?: number } = $props();
   const paths: Record<IconName, string> = {
     arrow: 'M5 12h14M13 6l6 6-6 6',
@@ -31,6 +33,9 @@
     shield: 'm12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6',
     chevron: 'm9 5 7 7-7 7',
     clock: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M12 7v5l3 2',
+    copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+    phone:
+      'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2',
   };
 </script>
 
