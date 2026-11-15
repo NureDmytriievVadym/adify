@@ -1,4 +1,3 @@
-import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -7,8 +6,10 @@ from sqlalchemy import String, cast, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adify_api.accounts.models import Account
+from adify_api.core import storage
 from adify_api.core.config import get_settings
-from adify_api.listings import storage
+from adify_api.listings.expiry import expiry_date as selected_expiry_date
+from adify_api.listings.expiry import expiry_moment
 from adify_api.listings.models import (
     Listing,
     ListingAttachment,
@@ -25,7 +26,6 @@ from adify_api.listings.schemas import (
 )
 from adify_api.orders.models import ACTIVE_ORDER_STATUSES, Order
 
-CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 LIKE_ESCAPE = "\\"
 
 
@@ -58,6 +58,14 @@ async def create_offer(session: AsyncSession, owner: Account, data: OfferCreate)
 
 
 async def _create(session, owner, type_, data, price, delivery_days) -> Listing:
+    expiry = expiry_moment(data.expiry_date)
+    if expiry <= datetime.now(UTC):
+        raise ListingError(
+            422,
+            "expiry_date_passed",
+            "Choose an expiry date that has not passed.",
+            "expiry_date",
+        )
     listing = Listing(
         owner_id=owner.id,
         type=type_,
@@ -67,6 +75,7 @@ async def _create(session, owner, type_, data, price, delivery_days) -> Listing:
         price=price,
         delivery_days=delivery_days,
         specs=[spec.model_dump() for spec in data.specs],
+        expires_at=expiry,
     )
     _set_audience(listing, data.audience)
     session.add(listing)
@@ -95,6 +104,10 @@ async def has_active_order(session: AsyncSession, listing_id: uuid.UUID) -> bool
     )
 
 
+async def has_order_history(session: AsyncSession, listing_id: uuid.UUID) -> bool:
+    return bool(await session.scalar(select(exists().where(Order.listing_id == listing_id))))
+
+
 async def locked_fields(session: AsyncSession, listing: Listing) -> list[str]:
     """FR-017: what the owner cannot change right now. The category is fixed while an
     order is active, because the order was agreed for that kind of placement."""
@@ -103,6 +116,7 @@ async def locked_fields(session: AsyncSession, listing: Listing) -> list[str]:
 
 async def update_listing(session: AsyncSession, listing: Listing, data: ListingUpdate) -> Listing:
     """Apply an owner's partial update (FR-017). Nothing is saved if any rule fails."""
+    ensure_not_deleted(listing)
     sent = data.model_fields_set
     is_request = listing.type == ListingType.REQUEST
     wrong_amount = "price_uah" if is_request else "budget_uah"
@@ -126,6 +140,25 @@ async def update_listing(session: AsyncSession, listing: Listing, data: ListingU
                 "category",
             )
         listing.category = data.category
+    if "expiry_date" in sent and data.expiry_date != selected_expiry_date(listing.expires_at):
+        # FR-021: the owner chooses when the listing ends, but FR-019 forbids reviving
+        # an expired listing; changing its date would do exactly that.
+        if listing.status == ListingStatus.EXPIRED:
+            raise ListingError(
+                409,
+                "listing_expired",
+                "An expired listing cannot be extended. Publish a new listing instead.",
+                "expiry_date",
+            )
+        expiry = expiry_moment(data.expiry_date)
+        if expiry <= datetime.now(UTC):
+            raise ListingError(
+                422,
+                "expiry_date_passed",
+                "Choose an expiry date that has not passed.",
+                "expiry_date",
+            )
+        listing.expires_at = expiry
 
     for field in ("title", "description", "delivery_days"):
         if field in sent:
@@ -168,11 +201,12 @@ async def list_listings(
 
     ``search`` matches title, description, or category. ``owner_id`` narrows the
     list to one account's own listings. ``open_only`` keeps only active listings: the
-    public marketplace hides paused and expired ones (FR-018, FR-019). Audience ranges
+    public marketplace hides paused and expired ones (FR-018, FR-019). Soft-deleted
+    listings are left out everywhere, the owner's own list included (FR-020). Audience ranges
     overlap rather than require exact equality: asking for ages 18–24 includes a listing
     targeting 18–34.
     """
-    filters = []
+    filters = [Listing.deleted_at.is_(None)]
     if type_ is not None:
         filters.append(Listing.type == type_)
     if category is not None:
@@ -181,6 +215,7 @@ async def list_listings(
         filters.append(Listing.owner_id == owner_id)
     if open_only:
         filters.append(Listing.paused_at.is_(None))
+        filters.append(Listing.expired_at.is_(None))
         filters.append(Listing.expires_at > datetime.now(UTC))
     if search and (term := search.strip()):
         pattern = _like_pattern(term)
@@ -262,6 +297,10 @@ def ensure_accepts_orders(listing: Listing) -> None:
     from an existing chat (FR-031), must call this.
     """
     status = listing.status
+    if status == ListingStatus.SOFT_DELETED:
+        raise ListingError(
+            409, "listing_deleted", "This listing was deleted and is not accepting new orders."
+        )
     if status == ListingStatus.PAUSED:
         raise ListingError(
             409, "listing_paused", "This listing is paused and is not accepting new orders."
@@ -274,6 +313,7 @@ def ensure_accepts_orders(listing: Listing) -> None:
 
 async def pause_listing(session: AsyncSession, listing: Listing) -> Listing:
     """FR-018: stop new orders. Existing orders continue; pausing twice is a no-op."""
+    ensure_not_deleted(listing)
     if listing.status == ListingStatus.EXPIRED:
         raise ListingError(409, "listing_expired", "This listing has already expired.")
     if listing.paused_at is None:
@@ -285,6 +325,7 @@ async def pause_listing(session: AsyncSession, listing: Listing) -> Listing:
 
 async def resume_listing(session: AsyncSession, listing: Listing) -> Listing:
     """FR-018/FR-019: take new orders again, unless the listing's lifetime has ended."""
+    ensure_not_deleted(listing)
     if listing.status == ListingStatus.EXPIRED:
         raise ListingError(409, "listing_expired", "An expired listing cannot be resumed.")
     if listing.paused_at is not None:
@@ -294,19 +335,41 @@ async def resume_listing(session: AsyncSession, listing: Listing) -> Listing:
     return listing
 
 
+async def delete_listing(session: AsyncSession, listing: Listing) -> ListingStatus | None:
+    """FR-020: soft-delete a listing with any order history, remove one without outright.
+
+    Returns ``SOFT_DELETED``, or ``None`` when the listing is gone. Orders keep pointing at a
+    soft-deleted listing; chats lose the reference of a removed one (``ON DELETE SET NULL``).
+    Deleting a soft-deleted listing again changes nothing.
+    """
+    if listing.deleted_at is None and not await has_order_history(session, listing.id):
+        attachment_ids = [attachment.id for attachment in listing.attachments]
+        await session.delete(listing)
+        await session.commit()
+        for attachment_id in attachment_ids:
+            await storage.remove(attachment_id)
+        return None
+    if listing.deleted_at is None:
+        listing.deleted_at = datetime.now(UTC)
+        await session.commit()
+    return ListingStatus.SOFT_DELETED
+
+
+def ensure_not_deleted(listing: Listing) -> None:
+    """FR-020: a soft-deleted listing is only kept as a record and can no longer change."""
+    if listing.deleted_at is not None:
+        raise ListingError(409, "listing_deleted", "This listing has been deleted.")
+
+
 def ensure_owner(listing: Listing, account: Account) -> None:
     if listing.owner_id != account.id:
         raise ListingError(403, "not_listing_owner", "Only the owner can change this listing.")
 
 
-def clean_filename(filename: str) -> str:
-    name = CONTROL_CHARACTERS.sub("", filename.replace("\\", "/").rsplit("/", 1)[-1]).strip()
-    return name[-255:] or "attachment"
-
-
 async def add_attachment(
     session: AsyncSession, listing: Listing, filename: str, data: bytes
 ) -> ListingAttachment:
+    ensure_not_deleted(listing)
     settings = get_settings()
     if not data:
         raise ListingError(422, "attachment_empty", "The file is empty.")
@@ -326,7 +389,7 @@ async def add_attachment(
     attachment = ListingAttachment(
         id=uuid.uuid4(),
         listing_id=listing.id,
-        filename=clean_filename(filename),
+        filename=storage.clean_filename(filename),
         content_type=content_type,
         size=len(data),
     )
@@ -344,6 +407,7 @@ async def add_attachment(
 async def delete_attachment(
     session: AsyncSession, listing: Listing, attachment_id: uuid.UUID
 ) -> None:
+    ensure_not_deleted(listing)
     attachment = next((item for item in listing.attachments if item.id == attachment_id), None)
     if attachment is None:
         raise ListingError(404, "attachment_not_found", "This attachment could not be found.")

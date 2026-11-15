@@ -2379,6 +2379,92 @@ main:focus {
   font-size: 13px;
   color: var(--muted);
 }
+.stage-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.stage-complete strong {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.stage-actions {
+  display: flex;
+  gap: 12px;
+}
+.stage-form,
+.evidence-form {
+  margin-top: 16px;
+}
+.evidence-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.evidence-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.evidence-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.evidence-meta strong {
+  color: var(--ink);
+}
+.evidence-note {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.evidence-files {
+  margin-top: 2px;
+}
+/* ADY-023: the customer's change request quoted for the provider, and their history. */
+.change-request-message {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  background: #fff;
+  white-space: pre-line;
+}
+/* Confirmation before a step that changes an order's state. */
+.confirm-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+  color: inherit;
+  box-shadow: 0 20px 50px #0003;
+}
+.confirm-dialog::backdrop {
+  background: #1d1d1b99;
+}
+.confirm-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.confirm-dialog p {
+  margin: 0 0 20px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.change-requests-title {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+}
 .order-state {
   flex-shrink: 0;
   padding: 3px 10px;
@@ -5495,8 +5581,23 @@ body {
 
 /* FR-017: editing a listing */
 .card-edit {
+  position: relative;
+  z-index: 2;
   display: inline-block;
   margin-bottom: 17px;
+}
+
+/* The title link stretches over the whole card, so a click anywhere (the bottom arrow too)
+   opens the listing while keyboards and screen readers still meet a single link. */
+.listing-card {
+  position: relative;
+}
+
+.listing-card h3 a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .locked-hint {
@@ -5587,6 +5688,43 @@ body {
 .detail-title .listing-state {
   margin-left: 10px;
   vertical-align: middle;
+}
+
+/* FR-020: deleting is kept quiet until asked for, then confirmed in place. */
+.delete-listing {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.delete-trigger {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #b3261e;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.delete-trigger:hover {
+  text-decoration: underline;
+}
+.delete-question {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.delete-confirm {
+  border-color: #b3261e;
+  background: #b3261e;
+  color: #fff;
 }
 
 .closed-note {

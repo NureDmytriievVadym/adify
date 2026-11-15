@@ -41,6 +41,7 @@ most two decimals, up to 99,999,999.99; amounts are returned as `price_uah` stri
 | `category`      | one of the six slugs                   | one of the six slugs |
 | `title`         | 5–120 characters                       | 5–120 characters     |
 | `description`   | 20–5,000 characters                    | 20–5,000 characters  |
+| `expiry_date`   | required, today or later (FR-021)      | same                 |
 | `budget_uah`    | required, > 0                          | —                    |
 | `price_uah`     | —                                      | required, > 0        |
 | `delivery_days` | optional, 1–365                        | required, 1–365      |

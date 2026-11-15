@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from email.message import EmailMessage
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -28,12 +29,18 @@ async def sessionmaker() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
 
 
 @pytest.fixture
-async def client(sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncClient]:
+def app() -> FastAPI:
+    return create_app()
+
+
+@pytest.fixture
+async def client(
+    app: FastAPI, sessionmaker: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[AsyncClient]:
     async def session_override() -> AsyncIterator[AsyncSession]:
         async with sessionmaker() as session:
             yield session
 
-    app = create_app()
     app.dependency_overrides[get_session] = session_override
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client

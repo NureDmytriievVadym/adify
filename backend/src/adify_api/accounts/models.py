@@ -47,6 +47,8 @@ class Account(Base):
     email_verified: Mapped[bool] = mapped_column(default=False)
     phone_verified: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # FR-022: three months without a successful sign-in expires the owner's listings.
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AccountBan(Base):

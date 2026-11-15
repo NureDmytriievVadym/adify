@@ -194,6 +194,7 @@ type MockListing = {
   audience: Record<string, unknown> | null;
   owner: { id: string; display_name: string; role: string };
   status: 'active' | 'paused' | 'expired';
+  expiry_date: string;
   expires_at: string;
   attachments: {
     id: string;
@@ -216,7 +217,8 @@ const listing = (type: 'request' | 'offer', body: Record<string, unknown>): Mock
   audience: null as null | Record<string, unknown>,
   owner: { id: '1', display_name: 'Olena Koval', role: 'provider' },
   status: 'active',
-  expires_at: '2026-12-01T10:00:00Z',
+  expiry_date: '2026-12-01',
+  expires_at: '2026-12-01T22:00:00Z',
   attachments: [
     {
       id: 'a1',
@@ -238,6 +240,7 @@ test('a customer publishes an ad request with a budget', async ({ page }) => {
   await page.getByLabel('Title').fill('Looking for a home for our story');
   await page.getByLabel('Description').fill('We want a website to publish a sponsored article.');
   await page.getByLabel('Budget (UAH)').fill('4500');
+  await page.getByLabel('Expiry date').fill('2027-12-31');
   await page.getByLabel('Specification 1 name').fill('Length');
   await page.getByLabel('Specification 1 value').fill('1,000 words');
   await page.getByLabel(/Attachments/).setInputFiles({
@@ -253,6 +256,7 @@ test('a customer publishes an ad request with a budget', async ({ page }) => {
   expect(api.created[0].body).toMatchObject({
     category: 'sponsored-articles',
     budget_uah: '4500',
+    expiry_date: '2027-12-31',
     specs: [{ label: 'Length', value: '1,000 words' }],
   });
   expect(api.created[0].body).not.toHaveProperty('delivery_days');
@@ -288,6 +292,22 @@ test('validates the form before sending it', async ({ page }) => {
   await expect(page.getByText('Enter a price in UAH, for example 2500 or 2500.50.')).toBeVisible();
   await expect(page.getByText('Enter the delivery time in days.')).toBeVisible();
   await expect(page.getByLabel('Category')).toBeFocused();
+  expect(api.created).toHaveLength(0);
+});
+
+test('rejects an expiry date in the past before sending', async ({ page }) => {
+  const api = await mockApi(page, 'provider');
+  await page.goto('/listings/new');
+
+  await page.getByLabel('Category').selectOption('website-banners');
+  await page.getByLabel('Title').fill('Your brand on a design journal');
+  await page.getByLabel('Description').fill('A display banner placement on a design journal.');
+  await page.getByLabel('Price (UAH)').fill('3500');
+  await page.getByLabel('Delivery time in days').fill('5');
+  await page.getByLabel('Expiry date').fill('2020-01-01');
+  await page.getByRole('button', { name: 'Publish offering' }).click();
+
+  await expect(page.getByText('Choose today or a later date.')).toBeVisible();
   expect(api.created).toHaveLength(0);
 });
 
@@ -545,6 +565,19 @@ test('360px live listings use one column and open details', async ({ page }) => 
   await cards.nth(0).getByRole('link').first().click();
   await expect(page).toHaveURL(`/listings/${LISTING_ID}`);
   await expect(page.getByRole('heading', { name: 'Placement specification' })).toBeVisible();
+});
+
+test('clicking anywhere on a card, the bottom arrow too, opens the listing', async ({ page }) => {
+  await mockApi(page, null);
+  await page.goto('/');
+
+  const card = page.locator('.listing-card', { hasText: 'A provider offering' });
+  await expect(card.getByRole('link')).toHaveCount(1);
+  await card.locator('.card-arrow').scrollIntoViewIfNeeded();
+  const arrow = await card.locator('.card-arrow').boundingBox();
+  await page.mouse.click(arrow!.x + arrow!.width / 2, arrow!.y + arrow!.height / 2);
+
+  await expect(page).toHaveURL(`/listings/${LISTING_ID}`);
 });
 
 test('the home page highlights the latest public listings', async ({ page }) => {

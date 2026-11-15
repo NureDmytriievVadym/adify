@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 from pathlib import Path
 
@@ -12,6 +13,7 @@ SIGNATURES: list[tuple[bytes, str]] = [
     (b"GIF89a", "image/gif"),
     (b"%PDF-", "application/pdf"),
 ]
+CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def sniff_content_type(data: bytes) -> str | None:
@@ -23,6 +25,23 @@ def sniff_content_type(data: bytes) -> str | None:
     if data[4:8] == b"ftyp":
         return "video/mp4"
     return None
+
+
+def looks_like_text(data: bytes) -> bool:
+    """A conservative text check used to label otherwise unknown evidence files."""
+    if b"\x00" in data:
+        return False
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def clean_filename(filename: str) -> str:
+    """Keep only the base name and drop control characters; cap at the DB column size."""
+    name = CONTROL_CHARACTERS.sub("", filename.replace("\\", "/").rsplit("/", 1)[-1]).strip()
+    return name[-255:] or "attachment"
 
 
 def path_of(attachment_id: uuid.UUID) -> Path:

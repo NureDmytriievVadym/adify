@@ -16,6 +16,7 @@ OFFER = {
     "description": "A display banner placement on an independent design journal.",
     "price_uah": "3500.00",
     "delivery_days": 5,
+    "expiry_date": (datetime.now(UTC).date() + timedelta(days=30)).isoformat(),
     "specs": [],
 }
 OWNER_EMAIL = "provider@example.com"

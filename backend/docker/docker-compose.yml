@@ -16,6 +16,16 @@ services:
       ADIFY_SMTP_USERNAME: ${ADIFY_SMTP_USERNAME:-}
       ADIFY_SMTP_PASSWORD: ${ADIFY_SMTP_PASSWORD:-}
       ADIFY_MAIL_FROM: ${ADIFY_MAIL_FROM:-Adify <no-reply@adify.local>}
+      # Payments go to the local Mono mock, which calls the webhook on the Compose network.
+      # To try real Mono, set the three values in .env (see .env.example).
+      ADIFY_MONO_TOKEN: ${ADIFY_MONO_TOKEN:-mono-mock}
+      ADIFY_MONO_API_URL: ${ADIFY_MONO_API_URL:-http://mono-mock:8000}
+      # No colon: an explicitly empty value in .env sends no webhook URL at all.
+      ADIFY_API_PUBLIC_URL: ${ADIFY_API_PUBLIC_URL-http://backend:8000}
+      # FR-041: set ADIFY_CLAMAV_HOST=clamav with `--profile malware` to scan evidence
+      # with ClamAV. An empty host uses the built-in EICAR check only.
+      ADIFY_CLAMAV_HOST: ${ADIFY_CLAMAV_HOST:-}
+      ADIFY_CLAMAV_PORT: ${ADIFY_CLAMAV_PORT:-3310}
     init: true
     depends_on:
       postgres:
@@ -24,6 +34,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      mono-mock:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -67,6 +79,36 @@ services:
       # Runtime data, not source. Named volumes are unaffected by host file ownership.
       - uploads_data:/app/storage
 
+  # Development stand-in for Mono acquiring (ADY-020): pay with any Luhn-valid card number.
+  mono-mock:
+    build:
+      context: ../..
+      dockerfile: backend/docker/Dockerfile
+    command: ['uvicorn', 'adify_api.dev.mono_mock:app', '--host', '0.0.0.0', '--port', '8000']
+    ports:
+      - '127.0.0.1:${MONO_MOCK_PORT:-8095}:8000'
+    environment:
+      # Its payment page opens in the browser, so links use the host port.
+      MONO_MOCK_PUBLIC_URL: http://localhost:${MONO_MOCK_PORT:-8095}
+    init: true
+    healthcheck:
+      test:
+        [
+          'CMD',
+          '.venv/bin/python',
+          '-c',
+          "import socket; socket.create_connection(('localhost', 8000), 2)",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    develop:
+      watch:
+        - action: sync+restart
+          path: ../../backend/src/adify_api/dev
+          target: /app/src/adify_api/dev
+
   postgres:
     image: postgres:18-bookworm
     environment:
@@ -97,7 +139,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # Optional FR-041 malware scanner. Start it only when needed:
+  #   ADIFY_CLAMAV_HOST=clamav docker compose --profile malware up
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ['malware']
+    ports:
+      - '127.0.0.1:${CLAMAV_PORT:-3310}:3310'
+    volumes:
+      - clamav_data:/var/lib/clamav
+
 volumes:
   uploads_data:
   postgres_data:
   redis_data:
+  clamav_data:

@@ -18,24 +18,83 @@ interface Party {
   role: 'customer' | 'provider';
 }
 
+export interface Stage {
+  id: string;
+  title: string;
+  deadline: string | null;
+  completed_at: string | null;
+  completed_by: Party | null;
+}
+
+export interface EvidenceFile {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  url: string;
+  created_at: string;
+}
+
+export interface Evidence {
+  id: string;
+  author: Party;
+  note: string | null;
+  files: EvidenceFile[];
+  created_at: string;
+}
+
 export interface Order {
   id: string;
   status: OrderStatus;
   details: string;
   price_uah: string;
   deadline: string | null;
-  stages: { title: string; deadline: string | null }[];
+  stages: Stage[];
+  evidence: Evidence[];
   requirements: {
     listing_type: ListingType;
     category: string;
     has_requirements: boolean;
     specs: Spec[];
+    requires_creatives: boolean;
   };
   listing: { id: string; title: string; type: ListingType };
   chat_id: string | null;
   is_listing_owner: boolean;
   customer: Party;
   provider: Party;
+  created_at: string;
+  paid_at: string | null;
+  // FR-132: a paid order not started by then is canceled and the hold released.
+  start_deadline: string | null;
+  work_started_at: string | null;
+  // FR-124: why Start work is unavailable, such as "No validated creative".
+  work_start_blocker: string | null;
+  canceled_at: string | null;
+  cancel_reason: 'start_timeout' | 'customer_canceled' | 'provider_rejected' | null;
+  // FR-040–FR-044: the latest submission, acceptance, and change requests, oldest first.
+  review_started_at: string | null;
+  completed_at: string | null;
+  change_requests: ChangeRequest[];
+}
+
+export interface ChangeRequest {
+  id: string;
+  message: string;
+  status: 'pending' | 'agreed' | 'declined' | 'withdrawn';
+  created_at: string;
+  answered_at: string | null;
+}
+
+// Mono invoice statuses as the API reports them (FR-038).
+export type PaymentStatus =
+  'created' | 'processing' | 'hold' | 'success' | 'failure' | 'reversed' | 'expired';
+
+export interface Payment {
+  status: PaymentStatus;
+  amount_uah: string;
+  page_url: string | null;
+  failure_reason: string | null;
   created_at: string;
 }
 
@@ -70,15 +129,16 @@ export const formatDay = (day: string) =>
     new Date(`${day}T00:00:00`),
   );
 
-async function request<T>(path: string, body?: object): Promise<OrderResult<T>> {
+async function request<T>(path: string, body?: object | FormData): Promise<OrderResult<T>> {
+  const isForm = body instanceof FormData;
   try {
     const response = await fetch(`${PUBLIC_API_BASE_URL}/api/v1${path}`, {
       method: body ? 'POST' : 'GET',
       headers: {
         Authorization: `Bearer ${session.accessToken}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(body && !isForm ? { 'Content-Type': 'application/json' } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: isForm ? body : body ? JSON.stringify(body) : undefined,
     });
     if (response.ok) return { ok: true, value: (await response.json()) as T };
     const data = (await response.json().catch(() => null)) as {
@@ -93,6 +153,76 @@ async function request<T>(path: string, body?: object): Promise<OrderResult<T>> 
 
 export const fetchChatOrders = (chatId: string) => request<Order[]>(`/chats/${chatId}/orders`);
 export const fetchOrder = (id: string) => request<Order>(`/orders/${id}`);
+
+// FR-038: the API answers with Mono's payment page; an open invoice is reused.
+export const startPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`, {});
+// Reading the payment also syncs it from Mono, so it works where webhooks cannot arrive.
+export const fetchPayment = (orderId: string) => request<Payment>(`/orders/${orderId}/payment`);
+// FR-039: the provider starts a paid order; Mono charges the held funds.
+export const startWork = (orderId: string) => request<Order>(`/orders/${orderId}/start`, {});
+// FR-046, FR-047: before work starts the customer cancels or the provider rejects; Mono
+// releases any held funds.
+export const cancelOrder = (orderId: string) => request<Order>(`/orders/${orderId}/cancel`, {});
+export const rejectOrder = (orderId: string) => request<Order>(`/orders/${orderId}/reject`, {});
+
+// FR-040–FR-044: review of the submitted work.
+export const submitForReview = (orderId: string) => request<Order>(`/orders/${orderId}/review`, {});
+export const acceptWork = (orderId: string) => request<Order>(`/orders/${orderId}/accept`, {});
+export const requestChanges = (orderId: string, message: string) =>
+  request<Order>(`/orders/${orderId}/change-requests`, { message: message.trim() });
+export const answerChangeRequest = (orderId: string, requestId: string, agree: boolean) =>
+  request<Order>(
+    `/orders/${orderId}/change-requests/${requestId}/${agree ? 'agree' : 'decline'}`,
+    {},
+  );
+
+// FR-037: either participant can add stages and mark them complete while work is active.
+export const addStage = (orderId: string, title: string, deadline: string) =>
+  request<Order>(`/orders/${orderId}/stages`, {
+    title: title.trim(),
+    deadline: deadline || null,
+  });
+export const completeStage = (orderId: string, stageId: string) =>
+  request<Order>(`/orders/${orderId}/stages/${stageId}/complete`, {});
+export const reopenStage = (orderId: string, stageId: string) =>
+  request<Order>(`/orders/${orderId}/stages/${stageId}/reopen`, {});
+
+// FR-041: text, files, or both as one evidence submission.
+export function addEvidence(orderId: string, note: string, files: File[]) {
+  const form = new FormData();
+  if (note.trim()) form.set('note', note.trim());
+  for (const file of files) form.append('files', file);
+  return request<Order>(`/orders/${orderId}/evidence`, form);
+}
+
+/** Evidence files require the bearer token, so a plain anchor cannot open them. */
+export async function downloadEvidenceFile(file: EvidenceFile): Promise<OrderResult<null>> {
+  try {
+    const response = await fetch(`${PUBLIC_API_BASE_URL}${file.url}`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    });
+    if (!response.ok) return { ok: false, message: 'The evidence file could not be downloaded.' };
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = file.filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    return { ok: true, value: null };
+  } catch {
+    return { ok: false, message: 'Adify is unreachable. Try again in a moment.' };
+  }
+}
+
+// Times such as the start deadline are shown in the viewer's own zone.
+export const formatMoment = (moment: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(moment));
 
 // FR-033, FR-037: mirrors the API rules so most mistakes are explained before sending.
 export function validateOrder(input: OrderInput): string | null {

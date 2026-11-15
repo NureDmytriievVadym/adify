@@ -39,10 +39,12 @@ Mono, and storage credentials. Future contracts should be derived from FastAPI's
 OpenAPI schema rather than maintaining duplicate handwritten schema definitions.
 Do not add a second business API in SvelteKit route handlers.
 
-Further domain packages, JWT/session management, Socket.IO, scheduled
-jobs, and integrations will be introduced with their stories. The current
-`/api/v1/health` route reports liveness, not dependency readiness. Introduce a
-separate readiness check when the application acquires mandatory dependencies.
+Further domain packages, JWT/session management, Socket.IO, and integrations will
+be introduced with their stories. Time-based listing expiry is already in
+`adify_api.jobs` and runs once per cron invocation (see [story #15](story-015.md)).
+The current `/api/v1/health` route reports liveness, not dependency readiness.
+Introduce a separate readiness check when the application acquires mandatory
+dependencies.
 
 ## Local services
 

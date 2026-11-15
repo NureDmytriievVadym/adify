@@ -33,6 +33,7 @@ from adify_api.chats.models import Chat
 from adify_api.core.config import get_settings
 from adify_api.core.db import get_sessionmaker
 from adify_api.core.security import hash_password
+from adify_api.listings.expiry import expiry_date, expiry_moment
 from adify_api.listings.models import (
     Listing,
     ListingAttachment,
@@ -482,6 +483,7 @@ async def seed_demo_data(
             if spec.expired:
                 created_at = now - lifetime - timedelta(days=10)
                 paused_at = created_at + lifetime - timedelta(days=3)
+            expires_at = expiry_moment(expiry_date(created_at + lifetime))
             session.add(
                 Listing(
                     id=listing_id,
@@ -495,7 +497,7 @@ async def seed_demo_data(
                     specs=[{"label": label, "value": value} for label, value in spec.specs],
                     created_at=created_at,
                     paused_at=paused_at,
-                    expires_at=created_at + lifetime,
+                    expires_at=expires_at,
                 )
             )
             result.listings_created += 1

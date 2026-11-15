@@ -33,7 +33,7 @@
   });
 
   const stateLabel = (status: string) =>
-    status === 'paused' ? 'Paused' : status === 'expired' ? 'Expired' : null;
+    ({ paused: 'Paused', expired: 'Expired', soft_deleted: 'Deleted' })[status] ?? null;
 </script>
 
 <svelte:head>
@@ -68,7 +68,7 @@
             {#if chat.listing}
               <a class="text-link" href={`/listings/${chat.listing.id}`}>{chat.listing.title}</a>
               {#if stateLabel(chat.listing.status)}
-                <span class="listing-state" class:expired={chat.listing.status === 'expired'}
+                <span class="listing-state" class:expired={chat.listing.status !== 'paused'}
                   >{stateLabel(chat.listing.status)}</span
                 >
               {/if}

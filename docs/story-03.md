@@ -47,6 +47,12 @@ same rules in the browser, and maps API errors to their fields. The header's
 `PUBLIC_API_BASE_URL` (default `http://localhost:8000`); the API allows the origins
 in `ADIFY_CORS_ORIGINS`.
 
+After a successful registration (REF-003) the page signs the new user in with the
+email and password just entered (`POST /api/v1/auth/sign-in`, see story #4) and opens
+`/account`, where the verification code is entered. The API contract is unchanged:
+`POST /api/v1/accounts` still returns only the profile. If the automatic sign-in fails,
+the account exists anyway, so the page shows the welcome card with a **Sign in** link.
+
 ## Open TBDs
 
 - Duplicate-account handling and detailed messages (§3.2.1.5). Registration
@@ -60,5 +66,6 @@ in `ADIFY_CORS_ORIGINS`.
 `backend/tests/test_registration.py` covers both roles, normalization, phone and
 password rejection, both-role and staff-role attempts, banned email/phone, bans
 outliving contact changes, duplicates, and the OpenAPI contract. The Playwright
-suite registers both roles against a mocked API, checks browser validation, a
-banned-contact error, and runs axe on `/register` at all layout widths.
+suite registers both roles against a mocked API and checks that each is signed in and
+lands on `/account`, the fallback when the automatic sign-in fails, browser validation,
+a banned-contact error, and runs axe on `/register` at all layout widths.

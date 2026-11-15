@@ -28,11 +28,20 @@ class ListingCategory(StrEnum):
 
 
 class ListingStatus(StrEnum):
-    """FR-018/FR-019: derived from ``paused_at`` and ``expires_at``. Expiry wins over a pause."""
+    """FR-018–FR-020: derived from ``deleted_at``, ``expired_at``/``expires_at`` and
+    ``paused_at``, in that order of precedence."""
 
     ACTIVE = "active"
     PAUSED = "paused"
     EXPIRED = "expired"
+    SOFT_DELETED = "soft_deleted"
+
+
+class ExpiryReason(StrEnum):
+    """FR-021/FR-022: why a listing stopped being active."""
+
+    DATE = "date"
+    INACTIVITY = "inactivity"
 
 
 def default_expiry() -> datetime:
@@ -65,6 +74,14 @@ class Listing(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=default_expiry, index=True
     )
+    # FR-021/FR-022: recorded by the expiry jobs, so the reason and notice are explicit.
+    expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expired_reason: Mapped[ExpiryReason | None] = mapped_column(
+        _enum(ExpiryReason, "expiry_reason")
+    )
+    expiry_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # FR-020: a deleted listing with order history stays in records, hidden from search.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     owner: Mapped[Account] = relationship(lazy="selectin")
     attachments: Mapped[list["ListingAttachment"]] = relationship(
@@ -73,6 +90,10 @@ class Listing(Base):
 
     @property
     def status(self) -> ListingStatus:
+        if self.deleted_at is not None:
+            return ListingStatus.SOFT_DELETED
+        if self.expired_at is not None:
+            return ListingStatus.EXPIRED
         # SQLite returns naive datetimes; every stored time is UTC.
         expires = self.expires_at
         if expires.tzinfo is None:
